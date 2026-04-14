@@ -1,0 +1,268 @@
+
+# Configuration file for mobstr3D
+
+title = "Configuration file for mobstr3D"
+version = "1.0.0" 
+# Uses semantic versioning - Major.Minor.Patch sequence
+
+
+[modules]
+
+# Define which modules you want to run. 
+# Allowed values:
+# * true    : Run this module
+# * false    : Do not run this module
+
+preprocessing = true
+fitting = true
+strain_extraction = false
+
+
+# Define the id of the batch you are processing. This will define the name of the folder that processed outputs will be written to.
+# Default: "test"
+batch_ID = "test"
+
+
+[parameters]
+
+# Define if single frame (two-state model) or all frames are to be analysed
+# Allowed values:
+# * "single"
+# * "all"
+# Default = "single"
+frames_to_fit = "single"
+
+# Define the frame of interest - typically end-systole (ES)
+# This defines the frame for analysis when "frames_to_fit" = "single".
+# Note: python is zero-indexed (first frame = 0, second frame = 1, etc.)
+# Default = 21 (ES frame assigned to "example_human_data")
+frame_of_interest = 21
+
+# Define the earliest seed frame
+# This defines the frame which will be used as a seed point/true phase reference when unwrapping the phase dicoms.
+# Note: python is zero-indexed (first frame = 0, second frame = 1, etc.)
+# Note: unwrapping of earlier frames is limited by the segmentation model.
+# Default = 5
+frame_of_seed = 5
+
+
+### PREPROCESSING MODULE ###
+
+# This module is only run if the configuration above has "preprocessing = true".
+# Ignore if false.
+
+
+[preprocessing_input]
+
+# Define which inputs need to be preprocessed. #WIP
+# Allowed values:
+# * "DICOM"                 : Raw DENSE with 3D displacement encoding CMR images (.dcm files)
+# * "denseanalysis"         : Output of DENSEanalysis MATLAB tool (.mat files)
+# * "bivme"                 : #WIP
+# Default: "denseanalysis"
+preprocessing_input = "DICOM"
+
+
+[preprocessing_paths]
+
+# Define the directory containing images/DICOMs.
+# Default: "data/example/example_human_data/dicoms"
+dicom_dir = "data/example/example_human_data/dicoms"
+
+# Define the directory containing preprocessing input data; depending on preprocessing inputs specified above.
+# Default: "data/example/example_human_data/denseanalysis_output"
+input_dir = "data/example/example_human_data/dicoms"
+
+# Define the directory for output of processed data.
+# Default: "data/example/example_human_data/preprocessing_output_denseanalysis"
+output_dir = "data/example/example_human_data/preprocessing_output_dicom"
+
+
+[preprocessing_segmentation]
+# This submodule is only run if the configuration above has "preprocessing_input = DICOM".
+# Ignore if false.
+
+# Define the segmentation model to be used for segmenting the DICOM images
+# Allowed values:
+# * "modelESv2"             : Basic model trained on 4 frames of segmentation, accurate for frames around systole
+# * "modelallv2"            : #WIP
+# * "custom"                : Allows implementation of custom segmentation models
+# Default: "modelESv2"
+segmentation_model = "modelESv2"
+
+
+[preprocessing_unwrapping]
+# This submodule is only run if the configuration above has "preprocessing_input = DICOM".
+# Ignore if false.
+
+# Define if a mask is used for phase unwrapping
+# Allowed values:
+# * true              : A mask is used based on successful segmentation
+# * false             : No mask is used - all pixels are unwrapped
+# Default: true
+mask_flag = true
+
+# Define if seed point selection is automatic or manual
+# Allowed values:
+# * "auto"              : Automatically picks the pixel within the mask with the highest phase quality
+# * "manual"            : Manually select seed point from a GUI
+# Default: "auto"
+seed_point_selection = "auto"
+
+
+[preprocessing_slicecorrection]
+
+# Define the segmentation model to be used for segmenting the DICOM images
+# Allowed values:
+# * "none"                  : No slice correction applied
+# * "contour_centroid"      : Crude method, aligning slices based on epicardial contour centroid
+# * "bivme"                 : #WIP
+# Default: "none"
+slice_correction_method = "contour_centroid"
+
+
+
+### FITTING MODULE ###
+
+# This module is only run if the configuration above has "fitting = true".
+# Ignore if false.
+
+
+[fitting_paths]
+
+# Define the directory containing images/DICOMs.
+# Default: "data/example/example_human_data/dicoms"
+dicom_dir = "data/example/example_human_data/dicoms"
+
+# Define the directory containing displacement input data.
+# Note: if preprocessing was performed, then this should point to the same location as preprocessing_output dir
+# Default: "data/example/example_human_data/preprocessing_output_denseanalysis"
+input_disp_dir = "data/example/example_human_data/preprocessing_output_dicom"
+
+# Define the directory containing contour input data.
+# Note: if preprocessing was performed, then this should point to the same location as preprocessing_output dir
+# Default: "data/example/example_human_data/preprocessing_output_denseanalysis"
+input_cont_dir = "data/example/example_human_data/preprocessing_output_dicom"
+
+# Define the directory for output of models, data and results.
+# Default: "data/example/example_human_data/fitting_output_denseanalysis"
+output_dir = "data/example/example_human_data/fitting_output_dicom"
+
+
+[plotting_flags]
+
+# Flags to turn on/off plotting of meshes throughout fitting pipeline (mostly used for debugging)
+plot_template_all = false
+plot_template_final = false
+plot_geometric = false
+plot_ffd = true
+plot_slider = false
+
+
+[model_parameters]
+
+# Define the number of elements in each direction [circumferential, longitudinal, radial], deciding how much the initial template model is refined
+# Default = [8, 1, 1]
+num_of_elements = [8, 1, 1]
+
+# Define the distance from the top and bottom of the template mesh to the input data
+# Default = 1.0
+dist_to_data = 1.0
+
+
+[smoothing]
+
+# Define whether smoothing should be applied during the geometric/surface fitting process
+# Allowed values:
+# * "none"            : No smoothing applied
+# * "sobprior"        : Apply Sobolev smoothing, requires smoothing weights to be defined below #WIP
+# Default: "none"
+geo_smoothing = "none"
+
+# Define smoothing weights when applying Sobolev smoothing on the geometric fit
+# Note: only applied when set by geo_smoothing above
+geo_sobprior_weight = 0.1
+
+# Define whether smoothing should be applied during the geometric/surface fitting process
+# Allowed values:
+# * "none"            : No smoothing applied
+# * "sob"             : Apply Sobolev smoothing, requires smoothing weights to be defined below #WIP
+# * "sobprior"        : Penalise deviation away from an initial input mesh #WIP
+# * "incompressible"  : Penalise against volume changes #WIP
+# Default: "none"
+ffd_smoothing = "none"
+
+# Define smoothing weights when applying Sobolev smoothing on the ffd fit
+# Note: only applied when set by ffd_smoothing above
+ffd_sob_weight = 0.1
+
+# Define weight when applying Sobolev prior on the ffd fit
+# Note: only applied when set by ffd_smoothing above
+ffd_sobprior_weight = 0.1
+
+# Define weight when enforcing incompressibility on the ffd fit
+# Note: only applied when set by ffd_smoothing above
+ffd_incompressible_weight = 0.0
+
+
+
+
+### STRAIN ANALYSIS MODULE ###
+
+# This module is only run if the configuration above has "strain_analysis = true".
+# Ignore if false.
+
+
+[strain]
+
+# Define the locations at which strains will be evaluated
+# Allowed values:
+# * "fitted_points"          : Evaluated at the end points as determined by the fitted model
+# * "external"                : Provide a path to a set of points where strain will be evaluated #WIP
+# Default: "fitted_points"
+strain_points = "fitted_points"
+
+# Note: by default, strains are saved into .json model files if the module "strain_extraction = true".
+# All other strain outputs can be selected here.
+
+# Define strain output location
+# Default: "data/example/example_human_data/strain_output_denseanalysis"
+output_dir = "data/example/example_human_data/strain_output_dicom"
+
+# Define strain output types
+csv = true
+
+# Flags to turn on/off plotting of strain results (disable when batch preprocessing)
+plot_strains_all = true
+
+
+
+
+
+### LOGGING ###
+
+[logging]
+
+# Change the log visibility for fitting. Useful for debugging and oversight.
+# If true, detailed logs will show on the console.
+# Default: true
+show_detailed_logging = true
+
+# Decide whether or not to save the log files. If true, a .log file will be generated.
+# Default: true
+generate_log_file = true
+
+# Define the directory for output of log files.
+# Default: "data/example/example_human_data/logs_denseanalysis"
+output_dir = "data/example/example_human_data/logs_dicom"
+
+
+### DEBUGGING ###
+
+[debug_flags]
+debug_segmentation = false
+debug_contours = false
+debug_seedframe = false
+debug_phasequality = false
+debug_phaseunwrapping = false
+debug_displacements = false

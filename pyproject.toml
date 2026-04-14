@@ -1,0 +1,11 @@
+[project]
+name = "mobstr3D"
+version = "1.0.0"
+dependencies = [
+    "jax",
+    "scipy",
+    "numpy",
+    "pyvista",
+    "sparsejac",
+    "tqdm",
+]

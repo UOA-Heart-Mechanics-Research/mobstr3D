@@ -1,0 +1,34 @@
+{
+    "all_results": {
+        "nnUNetTrainer__nnUNetPlans__2d": 0.9393066491730346
+    },
+    "best_model_or_ensemble": {
+        "postprocessing_file": "nnUNet_results/Dataset200_DENSEmagmultiframe/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0_1_2_3_4/postprocessing.pkl",
+        "result_on_crossval_post_pp": 0.9393066491730346,
+        "result_on_crossval_pre_pp": 0.9393066491730346,
+        "selected_model_or_models": [
+            {
+                "configuration": "2d",
+                "plans_identifier": "nnUNetPlans",
+                "trainer": "nnUNetTrainer"
+            }
+        ],
+        "some_plans_file": "nnUNet_results/Dataset200_DENSEmagmultiframe/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0_1_2_3_4/plans.json"
+    },
+    "considered_models": [
+        {
+            "configuration": "2d",
+            "plans": "nnUNetPlans",
+            "trainer": "nnUNetTrainer"
+        }
+    ],
+    "dataset_name_or_id": "Dataset200_DENSEmagmultiframe",
+    "ensembling_allowed": true,
+    "folds": [
+        0,
+        1,
+        2,
+        3,
+        4
+    ]
+}
