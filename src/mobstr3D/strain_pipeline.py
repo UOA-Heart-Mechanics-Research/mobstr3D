@@ -1,8 +1,8 @@
 import sys
 from pathlib import Path
 
-from src.utils.io import import_models
-from src.utils.plot import plot_meshes_with_slider, plot_local_coordinate_axes_strain_points, plot_strains_colourmaps, plot_strains_2D_transmural, plot_strains_2D_transmural_xi
+from mobstr3D.utils.io import import_models
+from mobstr3D.utils.plot import plot_meshes_with_slider, plot_local_coordinate_axes_strain_points, plot_strains_colourmaps, plot_strains_2D_transmural, plot_strains_2D_transmural_xi
 
 
 def perform_strain(config, mylogger):
@@ -52,18 +52,30 @@ def perform_strain(config, mylogger):
         # Optional: Export strain results to CSV
         model.export_strains_csv(outputDir, mylogger)
 
-        # Debug: Visualize coordinate vectors at strain points
-        # plot_local_coordinate_axes_strain_points(model)
+        # Debug: Visualise local wall coordinate vectors at strain points
+        if config["strain"]["plot_wall_vectors"]:
+            plot_local_coordinate_axes_strain_points(model)
+
+        # Optional: Visualise strains
         if config["strain"]["plot_strains_all"]:
-            # Debug: Visualize strain components as colour maps on the fitted mesh
+            # Visualise strain components as colour maps on the fitted mesh
             plot_strains_colourmaps(model)
-            # Debug: Plot transmural strain profiles
-            plot_strains_2D_transmural_xi(model)
 
-
+            if config["strain"]["transmural_parameter"] == "radius":
+                # Plot transmural strain profiles using a computed radius
+                plot_strains_2D_transmural(model)
+            elif config["strain"]["transmural_parameter"] == "xi3":
+                # Plot transmural strain profiles using xi3 as the radial material coordinate
+                plot_strains_2D_transmural_xi(model)
+            elif config["strain"]["transmural_parameter"] == "normalised_radius":
+                # Plot transmural strain profiles using a computed radius normalized to 0-1 betweneen endo and epi
+                # plot_strains_2D_transmural_normalised(model)
+                mylogger.info('Normalised radius transmural parameter selected for evaluating strains. This is currently a WIP - change in config - skipping transmural plots.')
+            else:
+                mylogger.info('Invalid transmural parameter selected for evaluating strains - check config - skipping transmural plots.')
 
     
-    # # Optional: Perform strain-time analysis
+    # TODO # Optional: Perform strain-time analysis
     # if config["parameters"]["frames_to_fit"] == "all" and :
     #     model.perform_strain_time_analysis()
 

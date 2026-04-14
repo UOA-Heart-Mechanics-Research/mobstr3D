@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 import numpy as np
 
-from src.fitting.CylinderModel import CylinderModel
+from mobstr3D.fitting.CylinderModel import CylinderModel
 from HOMER.io import dump_mesh_to_dict, parse_mesh_from_dict
 
 

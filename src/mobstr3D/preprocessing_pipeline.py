@@ -1,8 +1,8 @@
 import sys
 
 # Import mobstr3D preprocessing modules
-from src.preprocessing.input_denseanalysis import perform_denseanalysis_preprocessing
-from src.preprocessing.input_DICOM import perform_DICOM_preprocessing
+from mobstr3D.preprocessing.input_denseanalysis import perform_denseanalysis_preprocessing
+from mobstr3D.preprocessing.input_DICOM import perform_DICOM_preprocessing
 
 
 def perform_preprocessing(config,mylogger):

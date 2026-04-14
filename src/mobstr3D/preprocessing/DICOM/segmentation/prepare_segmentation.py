@@ -88,7 +88,3 @@ def prep_segmentation(config, DENSE_series_index, mylogger):
     mylogger.info(f'Segmentation preparation complete. Nifti files saved to "{output_dir}".')
     
     return output_dir
-
-        
-
-        

@@ -7,7 +7,7 @@ import matplotlib.patches as mpatches
 import pydicom
 from pathlib import Path
 
-from src.preprocessing.DICOM.index_inputs import find_dicom_for_nifti, find_nifti_for_mask, get_slice_location
+from mobstr3D.preprocessing.DICOM.index_inputs import find_dicom_for_nifti, find_nifti_for_mask, get_slice_location
 
 def ray_march_endo(mask):
     """

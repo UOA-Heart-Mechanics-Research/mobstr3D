@@ -6,9 +6,9 @@ import shutil
 from loguru import logger
 
 # Import mobstr3D main modules
-from src.preprocessing_pipeline import perform_preprocessing
-from src.fitting_pipeline import perform_fitting
-from src.strain_pipeline import perform_strain
+from mobstr3D.preprocessing_pipeline import perform_preprocessing
+from mobstr3D.fitting_pipeline import perform_fitting
+from mobstr3D.strain_pipeline import perform_strain
 
 
 def main():

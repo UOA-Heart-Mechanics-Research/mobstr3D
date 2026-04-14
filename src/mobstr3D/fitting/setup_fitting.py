@@ -59,7 +59,7 @@ def get_template_parameters(endo_f, epi_f, config):
 
     # Define cylinder height
     cylinder_height = np.abs(epi_f[:, 0].max() - epi_f[:, 0].min()) + (2.0 * config["model_parameters"]["dist_to_data"])  # Add padding to ensure full coverage
-    cylinder_bot = epi_f[:, 0].min() - config["model_parameters"]["dist_to_data"]
+    cylinder_bot = (epi_f[:, 0].min() - config["model_parameters"]["dist_to_data"])
 
     template_params = {
         "inner_radius": inner_radius,

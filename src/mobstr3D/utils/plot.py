@@ -150,34 +150,23 @@ def plot_local_coordinate_axes_strain_points(model):
     It uses the get_vectors function to get the local vectors in the mesh,
     and then plots the local coordinate axes in the world coordinates.
     """
-    # unique_elem, inv = jnp.unique_inverse(eles)
-    # out_wt = jnp.zeros((xis.shape[0], 3))
-    # out_v0 = jnp.zeros((xis.shape[0], 3))
-    # out_v1 = jnp.zeros((xis.shape[0], 3))
-    # out_v2 = jnp.zeros((xis.shape[0], 3))
-    # for ide, e in enumerate(unique_elem):
-    #     mask = ide == inv
-    #     try:
-    #         wpts, v0, v1, v2 = get_vectors(mesh, [e], xis[mask])
-    #         out_v0 = out_v0.at[mask].set(v0)
-    #         out_v1 = out_v1.at[mask].set(v1)
-    #         out_v2 = out_v2.at[mask].set(v2)
-    #         out_wt = out_wt.at[mask].set(wpts)
-    #     except Exception as e:
-    #         print(e)
-    #         breakpoint()
 
     def v_map(xi1, xi2, xi3):
+            """
+            Define orthogonal basis vectors v0, v1, v2 based on the material coordinate system defined by xi1, xi2, xi3.
+
+            Local wall cooordinate system defines strains in a local cardiac coordinate system.
+            """
 
             # v0 = xi1 = circumferential direction (theta)
             v0 = (xi1 / jnp.linalg.norm(xi1, axis=-1, keepdims=True))  # normalize
 
-            # v1 = xi2 = longitudinal direction (z) - perpendicular to xi1, resticted to the xi1-xi2 plane
+            # v1 = ~xi2 = longitudinal direction (z) - perpendicular to xi1, resticted to the xi1-xi2 plane
             xi2_orth = xi2 - jnp.sum(xi2 * xi1, axis=-1, keepdims=True) / jnp.sum(xi1 * xi1, axis=-1, keepdims=True) * xi1
             v1 = (xi2_orth / jnp.linalg.norm(xi2_orth, axis=-1, keepdims=True))  # normalize
 
-            # v2 = xi3 = radial direction (r) - perpendicular to xi1 and xi2
-            v2 = jnp.cross(v0, v1)  # cross product to get radial direction
+            # v2 = ~xi3 = radial direction (r) - perpendicular to xi1 and xi2
+            v2 = jnp.cross(v1, v0)  # cross product to get radial direction
             v2 = (v2 / jnp.linalg.norm(v2, axis=-1, keepdims=True))  # normalize
 
             return v0, v1, v2
@@ -192,26 +181,32 @@ def plot_local_coordinate_axes_strain_points(model):
 
             This is used to define the coordinate system for which strain tensors are defined at each local coordinate.
 
+            Material coordinate system (xi):
+            xi1 = material circumferential direction (theta) - v
+            xi2 = material longitudinal direction (z) - u
+            xi3 = material radial direction (r) - w
+
+            Local wall coordinate system (v):
             v0 = xi1 = circumferential direction (theta)
-            v1 = xi2 = longitudinal direction (z) - perpendicular to xi1, resticted to xi1-xi2 plane
-            v2 = xi3 = radial direction (r) - perpendicular to xi1 and xi2
+            v1 = longitudinal direction (z) - perpendicular to xi1, resticted to the xi1-xi2 plane
+            v2 = radial direction (r) - perpendicular to xi1 and xi2
             
             """
             if ele_xi_pair:
-                world_locs = mesh.evaluate_ele_xi_pair_embeddings(eles, xis)  # world locations of the embedded points
+                world_locs = mesh.evaluate_embeddings_ele_xi_pair(eles, xis)  # world locations of the embedded points
                 # define xi directions based on deriv embeddings
-                xi1 = mesh.evaluate_ele_xi_pair_deriv_embeddings(eles, xis, derivs=(1, 0, 0))  # derivative in xi1 direction (C) wrt.
-                xi2 = mesh.evaluate_ele_xi_pair_deriv_embeddings(eles, xis, derivs=(0, 1, 0))  # derivative in xi2 direction (L) wrt.
-                xi3 = mesh.evaluate_ele_xi_pair_deriv_embeddings(eles, xis, derivs=(0, 0, 1))  # derivative in xi3 direction (R) wrt.
+                xi1 = mesh.evaluate_deriv_embeddings_ele_xi_pair(eles, xis, derivs=(0, 1, 0))  # derivative in xi1 direction (C) wrt. v
+                xi2 = mesh.evaluate_deriv_embeddings_ele_xi_pair(eles, xis, derivs=(1, 0, 0))  # derivative in xi2 direction (L) wrt. u
+                xi3 = mesh.evaluate_deriv_embeddings_ele_xi_pair(eles, xis, derivs=(0, 0, 1))  # derivative in xi3 direction (R) wrt. w
                 v0, v1, v2 = v_map(xi1, xi2, xi3)
             else:
                 world_locs = mesh.evaluate_embeddings(eles, xis)  # world locations of the embedded points
                 # define xi directions based on deriv embeddings
-                xi1 = mesh.evaluate_deriv_embeddings(eles, xis, derivs=(1, 0, 0))  # derivative in xi1 direction (C) wrt.
-                xi2 = mesh.evaluate_deriv_embeddings(eles, xis, derivs=(0, 1, 0))  # derivative in xi2 direction (L) wrt.
-                xi3 = mesh.evaluate_deriv_embeddings(eles, xis, derivs=(0, 0, 1))  # derivative in xi3 direction (R) wrt.
+                xi1 = mesh.evaluate_deriv_embeddings(eles, xis, derivs=(0, 1, 0))  # derivative in xi1 direction (C) wrt. v
+                xi2 = mesh.evaluate_deriv_embeddings(eles, xis, derivs=(1, 0, 0))  # derivative in xi2 direction (L) wrt. u
+                xi3 = mesh.evaluate_deriv_embeddings(eles, xis, derivs=(0, 0, 1))  # derivative in xi3 direction (R) wrt. w
                 v0, v1, v2 = v_map(xi1, xi2, xi3)
-                
+
             return world_locs, v0, v1, v2
 
     eles, xis = model.fitted_mesh.embed_points(jnp.array(model.strain_points))
@@ -219,12 +214,16 @@ def plot_local_coordinate_axes_strain_points(model):
     world_locs, v0, v1, v2 = get_clr_basis(model.fitted_mesh, eles, xis)
     scene = pv.Plotter()
     model.fitted_mesh.plot(scene)
-    # scene.add_arrows(out_wt, out_v0, color='r')
-    # scene.add_arrows(out_wt, out_v1, color='g')
-    # scene.add_arrows(out_wt, out_v2, color='b')
-    scene.add_arrows(world_locs, v0, color='r')
-    scene.add_arrows(world_locs, v1, color='g')
-    scene.add_arrows(world_locs, v2, color='b')
+    pts = pv.PolyData(np.array(world_locs))
+    pts["v0"] = np.array(v0)
+    pts["v1"] = np.array(v1)
+    pts["v2"] = np.array(v2)
+    scene.add_mesh(pts.glyph(orient="v0", factor=3.0, scale=False), color="red", label="v0 (C - Red)")
+    scene.add_mesh(pts.glyph(orient="v1", factor=3.0, scale=False), color="green", label="v1 (L - Green)")
+    scene.add_mesh(pts.glyph(orient="v2", factor=3.0, scale=False), color="blue", label="v2 (R - Blue)")
+
+    scene.add_axes()
+    scene.add_legend()
     scene.show()
 
 
@@ -243,34 +242,67 @@ def plot_strains_colourmaps(model):
     """
     Plot the strains in the mesh using model.strains dict keys.
     """
-    sn = ['Circumferential (Theta)', 'Longitudinal (Z)','Radial (R)']
-    strain_keys = ["E_cc", "E_ll", "E_rr"]
+    sn = ['Circumferential (Theta)', 'Longitudinal (Z)','Radial (R)', 'Circ-Long','Circ-Rad', 'Long-Rad']
+    strain_keys = ["E_cc", "E_ll", "E_rr", "E_cl", "E_cr", "E_lr"]  # Use dict keys
 
     coords = model.strain_points
 
-    scene = pv.Plotter(shape=(1,3))
-    for tval in range(3):
-        scene.subplot(0, tval)
+    scene = pv.Plotter(shape=(2,3))
+    for tval in range(6):
+        scene.subplot(tval // 3, tval % 3)
         model.fitted_mesh.plot(scene, mesh_opacity=0.01)
         new_data = pv.PolyData(coords)
         new_data[f'{sn[tval]} Strain'] = model.strains[strain_keys[tval]]
-        # define the color range for the strain values
-        ms = np.median(model.strains[strain_keys[tval]])
-        sds = np.median(np.abs(model.strains[strain_keys[tval]] - ms))
-        sds = max(0.01, sds)  # sanity check on plotting
-        clim = [ms - 3 * sds, ms + 3 * sds]
-        if tval == 0:
-            clim = [-0.3, 0.0]
-        elif tval == 1:
-            clim = [-0.2, 0.1]
-        elif tval == 2:
-            clim = [-0.3, 1.0]
+        
+        # # v1 calculate the color range for the strain values (different for each strain component)
+        # ms = np.median(model.strains[strain_keys[tval]])
+        # sds = np.median(np.abs(model.strains[strain_keys[tval]] - ms))
+        # sds = max(0.01, sds)  # sanity check on plotting
+        # clim = [ms - 3 * sds, ms + 3 * sds]
+        # scene.add_mesh(
+        #     new_data,
+        #     render_points_as_spheres=True,
+        #     point_size=20,
+        #     clim=clim,
+        #     cmap='viridis',
+        #     scalar_bar_args={
+        #         'title': f'{sn[tval]} Strain',
+        #         'n_labels': 5,
+        #         'position_x': 0.25,
+        #         'width': 0.5,
+        #         'title_font_size': 30
+        #     }
+        
+        # # v2 - define cmaps - viridis
+        # if tval // 3 == 0:
+        #     clim = [-0.25, 0.5]
+        # elif tval // 3 == 1:
+        #     clim = [-0.02, 0.06]
+        # scene.add_mesh(
+        #     new_data,
+        #     render_points_as_spheres=True,
+        #     point_size=20,
+        #     clim=clim,
+        #     cmap='viridis',
+        #     scalar_bar_args={
+        #         'title': f'{sn[tval]} Strain',
+        #         'n_labels': 5,
+        #         'position_x': 0.25,
+        #         'width': 0.5,
+        #         'title_font_size': 30
+        #     }
+
+        # v3 - define mirrored cmaps - diverging colormap - coolwarm
+        if tval // 3 == 0:
+            clim = [-0.5, 0.5]
+        elif tval // 3 == 1:
+            clim = [-0.06, 0.06]
         scene.add_mesh(
             new_data,
             render_points_as_spheres=True,
             point_size=20,
             clim=clim,
-            cmap='viridis',
+            cmap='coolwarm',
             scalar_bar_args={
                 'title': f'{sn[tval]} Strain',
                 'n_labels': 5,
@@ -314,9 +346,9 @@ def plot_strains_2D_transmural(model):
             ax.scatter(x, y, c='blue', s=10)
             ax.set_xlabel('Radius (mm)')
             if i == 0:
-                ax.set_ylim(-0.3, 0.6)  # Set y-limits
+                ax.set_ylim(-0.4, 1.0)  # Set y-limits
             else:
-                ax.set_ylim(-0.05, 0.1)
+                ax.set_ylim(-0.2, 0.2)
             ax.set_title(f'{strain_names[count]} Strain')
             count += 1
 
@@ -349,7 +381,7 @@ def plot_strains_2D_transmural_xi(model):
             y = model.strains[strain_keys[count]]  # Extract the strain component by key
             ax.grid(True, alpha=0.5)
             ax.scatter(x, y, c='blue', s=10)
-            ax.set_xlabel('Radius (mm)')
+            ax.set_xlabel('xi3 (radial material coordinate)')
             if i == 0:
                 ax.set_ylim(-0.4, 1.0)  # Set y-limits
             else:

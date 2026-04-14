@@ -3,9 +3,9 @@ from pathlib import Path
 import numpy as np
 import jax.numpy as jnp
 
-from src.fitting.setup_fitting import load_contour, load_disp, get_template_parameters
-from src.fitting.CylinderModel import CylinderModel
-from src.utils.plot import plot_meshes_with_slider
+from mobstr3D.fitting.setup_fitting import load_contour, load_disp, get_template_parameters
+from mobstr3D.fitting.CylinderModel import CylinderModel
+from mobstr3D.utils.plot import plot_meshes_with_slider
 
 
 
@@ -59,16 +59,6 @@ def perform_fitting(config, mylogger):
 
     # Loop through frames
     for frame_idx in frames:
-
-        # if config["parameters"]["frames_to_fit"] == "all":
-        #     frame = frame_idx
-        #     mylogger.info(f'Fitting frame {frame}...')
-        # elif config["parameters"]["frames_to_fit"] == "single":
-        #     frame = config["parameters"]["frame_of_interest"]
-        #     mylogger.info(f'Fitting frame {frame}...')
-        # else:
-        #     mylogger.error(f'Invalid frame selection: {config["parameters"]["frames_to_fit"]}')
-        #     sys.exit(1)
 
         mylogger.info(f'Fitting frame {frame_idx}...')
 
@@ -124,7 +114,6 @@ def perform_fitting(config, mylogger):
         # Increase order to L2 basis function in xi3 direction after geofit
         model.increase_order_cylinder_L2_xi3_geofit(config["model_parameters"]["num_of_elements"])
         mylogger.info(f'Geometric: increased order in xi3 to L2 basis function.')
-
         if pflagGeo:
             model.plot_geofit_mesh()
 
@@ -135,11 +124,8 @@ def perform_fitting(config, mylogger):
             model.plot_geofit_mesh_and_disps()
             #model.plot_fitted_mesh()
             model.plot_fitted_sidebyside()
-        
-        ## Step 6: Make CLR
-        model.transpose_H3H3XX_x0_x1()
 
-        ## Step 7: Store model
+        ## Step 6: Store model
         models[str(frame_idx)] = model
 
     # Save models

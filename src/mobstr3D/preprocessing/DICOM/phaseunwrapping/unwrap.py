@@ -7,7 +7,7 @@ import pydicom
 from scipy.signal import convolve2d
 import nibabel as nib
 
-from src.preprocessing.DICOM.index_inputs import get_slice_location
+from mobstr3D.preprocessing.DICOM.index_inputs import get_slice_location
 
 
 

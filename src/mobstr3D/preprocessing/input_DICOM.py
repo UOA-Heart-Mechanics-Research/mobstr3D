@@ -5,11 +5,11 @@ import json
 import nibabel as nib
 import pydicom
 
-from src.preprocessing.DICOM.index_inputs import check_DENSE_3D, find_dicom_for_nifti, find_phasedicom_for_nifti, get_slice_location, flag_slice_location, get_number_of_slices, get_number_of_frames, index_DENSE_series, collect_imaging_parameters
-from src.preprocessing.DICOM.segmentation.prepare_segmentation import prep_segmentation
-from src.preprocessing.DICOM.segmentation.process_segmentation import create_contours_from_labels
-from src.preprocessing.DICOM.phaseunwrapping.unwrap import extract_displacements
-from src.preprocessing.DICOM.transform_data import transform_to_pseudo_cardiac_coordinates
+from mobstr3D.preprocessing.DICOM.index_inputs import check_DENSE_3D, find_dicom_for_nifti, find_phasedicom_for_nifti, get_slice_location, flag_slice_location, get_number_of_slices, get_number_of_frames, index_DENSE_series, collect_imaging_parameters
+from mobstr3D.preprocessing.DICOM.segmentation.prepare_segmentation import prep_segmentation
+from mobstr3D.preprocessing.DICOM.segmentation.process_segmentation import create_contours_from_labels
+from mobstr3D.preprocessing.DICOM.phaseunwrapping.unwrap import extract_displacements
+from mobstr3D.preprocessing.DICOM.transform_data import transform_to_pseudo_cardiac_coordinates
 
 
 
@@ -102,15 +102,15 @@ def perform_DICOM_preprocessing(config,mylogger):
 
     # Apply chosen segmentation method to input files to extract contours
     if config["preprocessing_segmentation"]["segmentation_model"] == "modelESv2":
-        from src.preprocessing.DICOM.segmentation.segment_DENSE_modelESv2 import infer_labels
-        model_path = Path("src/preprocessing/DICOM/segmentation/modelESv2")
+        from mobstr3D.preprocessing.DICOM.segmentation.segment_DENSE_modelESv2 import infer_labels
+        model_path = Path("mobstr3D/preprocessing/DICOM/segmentation/modelESv2")
         infer_output = infer_labels(config, infer_path, model_path, mylogger)
 
     elif config["preprocessing_segmentation"]["segmentation_model"] == "modelallv2":
         mylogger.error(f'WIP: modelallv2 segmentation model not yet implemented.')
         sys.exit(1)
-        from src.preprocessing.DICOM.segmentation.segment_DENSE_modelallv2 import infer_labels
-        model_path = Path("src/preprocessing/DICOM/segmentation/modelallv2")
+        from mobstr3D.preprocessing.DICOM.segmentation.segment_DENSE_modelallv2 import infer_labels
+        model_path = Path("mobstr3D/preprocessing/DICOM/segmentation/modelallv2")
         infer_output = infer_labels(config, infer_path, model_path, mylogger)
 
     elif config["preprocessing_segmentation"]["segmentation_model"] == "custom":

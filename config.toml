@@ -13,9 +13,9 @@ version = "1.0.0"
 # * true    : Run this module
 # * false    : Do not run this module
 
-preprocessing = true
+preprocessing = false
 fitting = true
-strain_extraction = false
+strain_extraction = true
 
 
 # Define the id of the batch you are processing. This will define the name of the folder that processed outputs will be written to.
@@ -44,6 +44,7 @@ frame_of_interest = 21
 # Note: unwrapping of earlier frames is limited by the segmentation model.
 # Default = 5
 frame_of_seed = 5
+
 
 
 ### PREPROCESSING MODULE ###
@@ -177,7 +178,7 @@ dist_to_data = 1.0
 # * "none"            : No smoothing applied
 # * "sobprior"        : Apply Sobolev smoothing, requires smoothing weights to be defined below #WIP
 # Default: "none"
-geo_smoothing = "none"
+geo_smoothing = "sobprior"
 
 # Define smoothing weights when applying Sobolev smoothing on the geometric fit
 # Note: only applied when set by geo_smoothing above
@@ -190,7 +191,7 @@ geo_sobprior_weight = 0.1
 # * "sobprior"        : Penalise deviation away from an initial input mesh #WIP
 # * "incompressible"  : Penalise against volume changes #WIP
 # Default: "none"
-ffd_smoothing = "none"
+ffd_smoothing = "sob"
 
 # Define smoothing weights when applying Sobolev smoothing on the ffd fit
 # Note: only applied when set by ffd_smoothing above
@@ -206,7 +207,6 @@ ffd_incompressible_weight = 0.0
 
 
 
-
 ### STRAIN ANALYSIS MODULE ###
 
 # This module is only run if the configuration above has "strain_analysis = true".
@@ -218,7 +218,7 @@ ffd_incompressible_weight = 0.0
 # Define the locations at which strains will be evaluated
 # Allowed values:
 # * "fitted_points"          : Evaluated at the end points as determined by the fitted model
-# * "external"                : Provide a path to a set of points where strain will be evaluated #WIP
+# * "external"               : Provide a path to a set of points where strain will be evaluated #WIP
 # Default: "fitted_points"
 strain_points = "fitted_points"
 
@@ -232,14 +232,22 @@ output_dir = "data/example/example_human_data/strain_output_dicom"
 # Define strain output types
 csv = true
 
+# Define the transmural parameter which should as the x-axis when plotting transmural strains
+# Allowed values:
+# * "radius"                : Raw radius computed given a centroid at (0,0) - use when observing the computational phantom
+# * "xi3"                   : Transmural distance determined by radial material coordinate - xi3
+# * "normalised_radius"     : Normalised radius computed between endo and epi, radially from the centroid. #WIP
+# Default: "xi3"
+transmural_parameter = "xi3"
+
 # Flags to turn on/off plotting of strain results (disable when batch preprocessing)
 plot_strains_all = true
-
-
+plot_wall_vectors = false    #mostly for debugging
 
 
 
 ### LOGGING ###
+
 
 [logging]
 
@@ -257,9 +265,12 @@ generate_log_file = true
 output_dir = "data/example/example_human_data/logs_dicom"
 
 
+
 ### DEBUGGING ###
 
+
 [debug_flags]
+
 debug_segmentation = false
 debug_contours = false
 debug_seedframe = false

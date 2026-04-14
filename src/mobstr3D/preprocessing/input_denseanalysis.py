@@ -4,8 +4,8 @@ from scipy.io import loadmat
 import numpy as np
 import json
 
-from src.preprocessing.denseanalysis.extract_data import collect_imaging_parameters, get_slice_location, flag_slice_location, extract_contours, extract_displacements
-from src.preprocessing.denseanalysis.transform_data import transform_to_pseudo_cardiac_coordinates
+from mobstr3D.preprocessing.denseanalysis.extract_data import collect_imaging_parameters, get_slice_location, flag_slice_location, extract_contours, extract_displacements
+from mobstr3D.preprocessing.denseanalysis.transform_data import transform_to_pseudo_cardiac_coordinates
 
 
 

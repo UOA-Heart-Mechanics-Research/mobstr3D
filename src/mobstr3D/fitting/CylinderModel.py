@@ -480,8 +480,8 @@ class CylinderModel:
             homer_params = template_true_params
 
             # Evaluate the cost of the homer params
-            inner_points = self.geofit_mesh.evaluate_ele_xi_pair_embeddings(e_iw, xi_iw, fit_params=homer_params)
-            outer_points = self.geofit_mesh.evaluate_ele_xi_pair_embeddings(e_ow, xi_ow, fit_params=homer_params)
+            inner_points = self.geofit_mesh.evaluate_embeddings_ele_xi_pair(e_iw, xi_iw, fit_params=homer_params)
+            outer_points = self.geofit_mesh.evaluate_embeddings_ele_xi_pair(e_ow, xi_ow, fit_params=homer_params)
 
             iw_dists = (inner_points - inner_contours).flatten()
             ow_dists = (outer_points - outer_contours).flatten()
@@ -652,6 +652,8 @@ class CylinderModel:
         # Undo fixing of parameters and regenerates mesh
         self.geofit_mesh.unfix_mesh()
 
+        #self.geofit_mesh = deepcopy(self.template_mesh) # This is a hot fix to skip geofit mesh fitting when observing computational phantom
+
         return self
     
 
@@ -748,14 +750,14 @@ class CylinderModel:
         """
 
         # Embed the start points into the mesh
-        elem, xis = self.geofit_mesh.embed_points(jnp.vstack(self.start_points))
+        elem, xis = self.geofit_mesh.embed_points(jnp.vstack(self.start_points), verbose=0) #change to verbose = 3 to visualize the embedding errors
         pre_sob = self.geofit_mesh.evaluate_sobolev()
         vol_0 = self.geofit_mesh.get_volume()
 
         def ffd(params):
 
             # Evaluate the mesh embeddings
-            out_data = (self.geofit_mesh.evaluate_ele_xi_pair_embeddings(elem, xis, fit_params=params) - jnp.vstack(self.end_points)).flatten()
+            out_data = (self.geofit_mesh.evaluate_embeddings_ele_xi_pair(elem, xis, fit_params=params) - jnp.vstack(self.end_points)).flatten()
 
             # Initialize smoothing terms
             sobprior_dif = jnp.array([])
@@ -809,32 +811,16 @@ class CylinderModel:
         self.fitted_RMSE = np.sqrt(np.mean(mag_error**2))
         mylogger.info(f"FFD Fit Root Mean Squared Error: {self.fitted_RMSE:.6f}")
 
+        # Print root mean squared error
+        NE_fitted_RMSE = np.sqrt(np.mean(self.fitted_errors**2))
+        mylogger.info(f"FFD Fit Root Mean Squared Error (non-euclidian): {NE_fitted_RMSE:.6f}")
+
         # Store fitted points
         self.fitted_points = self.end_points + self.fitted_errors[:end_fitted_points]
 
         self.fitted_mesh.generate_mesh()
 
         return self
-
-
-
-    def transpose_H3H3XX_x0_x1(self, mesh_ordering = [0,2,1,3,4,6,5,7,8,10,9,11]):
-        for node in self.geofit_mesh.nodes:
-            node['du'], node['dv'] = node['dv'], node['du']
-        for elem in self.geofit_mesh.elements:
-            elem.nodes = [elem.nodes[p] for p in mesh_ordering]
-
-        self.geofit_mesh.generate_mesh()
-
-        for node in self.fitted_mesh.nodes:
-            node['du'], node['dv'] = node['dv'], node['du']
-        for elem in self.fitted_mesh.elements:
-            elem.nodes = [elem.nodes[p] for p in mesh_ordering]
-
-        self.fitted_mesh.generate_mesh()
-
-        return self
-    
 
 
     """
@@ -847,7 +833,6 @@ class CylinderModel:
 
         """
         Define strain points given config.
-
         """
 
         if config["strain"]["strain_points"] == "fitted_points":
@@ -866,7 +851,8 @@ class CylinderModel:
     def get_strains(self, config, mylogger):
 
         """
-        Calculate strains based on the selected strain points.
+        Calculate strains within the modelbased on the selected strain points.
+
         """
 
         if self.strain_points is None or (hasattr(self.strain_points, "size") and self.strain_points.size == 0):
@@ -875,6 +861,11 @@ class CylinderModel:
 
 
         def v_map(xi1, xi2, xi3):
+            """
+            Define orthogonal basis vectors v0, v1, v2 based on the material coordinate system defined by xi1, xi2, xi3.
+
+            Local wall cooordinate system defines strains in a local cardiac coordinate system.
+            """
 
             # v0 = xi1 = circumferential direction (theta)
             v0 = (xi1 / jnp.linalg.norm(xi1, axis=-1, keepdims=True))  # normalize
@@ -884,7 +875,7 @@ class CylinderModel:
             v1 = (xi2_orth / jnp.linalg.norm(xi2_orth, axis=-1, keepdims=True))  # normalize
 
             # v2 = xi3 = radial direction (r) - perpendicular to xi1 and xi2
-            v2 = jnp.cross(v0, v1)  # cross product to get radial direction
+            v2 = jnp.cross(v1, v0)  # cross product to get radial direction
             v2 = (v2 / jnp.linalg.norm(v2, axis=-1, keepdims=True))  # normalize
 
             return v0, v1, v2
@@ -899,37 +890,51 @@ class CylinderModel:
 
             This is used to define the coordinate system for which strain tensors are defined at each local coordinate.
 
+            Material coordinate system (xi):
+            xi1 = material circumferential direction (theta) - v
+            xi2 = material longitudinal direction (z) - u
+            xi3 = material radial direction (r) - w
+
+            Local wall coordinate system (v):
             v0 = xi1 = circumferential direction (theta)
-            v1 = xi2 = longitudinal direction (z) - perpendicular to xi1, resticted to the xi1-xi2 plane
-            v2 = xi3 = radial direction (r) - perpendicular to xi1 and xi2
+            v1 = longitudinal direction (z) - perpendicular to xi1, resticted to the xi1-xi2 plane
+            v2 = radial direction (r) - perpendicular to xi1 and xi2
             
             """
             if ele_xi_pair:
-                world_locs = mesh.evaluate_ele_xi_pair_embeddings(eles, xis)  # world locations of the embedded points
+                world_locs = mesh.evaluate_embeddings_ele_xi_pair(eles, xis)  # world locations of the embedded points
                 # define xi directions based on deriv embeddings
-                xi1 = mesh.evaluate_ele_xi_pair_deriv_embeddings(eles, xis, derivs=(1, 0, 0))  # derivative in xi1 direction (C) wrt.
-                xi2 = mesh.evaluate_ele_xi_pair_deriv_embeddings(eles, xis, derivs=(0, 1, 0))  # derivative in xi2 direction (L) wrt.
-                xi3 = mesh.evaluate_ele_xi_pair_deriv_embeddings(eles, xis, derivs=(0, 0, 1))  # derivative in xi3 direction (R) wrt.
+                xi1 = mesh.evaluate_deriv_embeddings_ele_xi_pair(eles, xis, derivs=(0, 1, 0))  # derivative in xi1 direction (C) wrt. v
+                xi2 = mesh.evaluate_deriv_embeddings_ele_xi_pair(eles, xis, derivs=(1, 0, 0))  # derivative in xi2 direction (L) wrt. u
+                xi3 = mesh.evaluate_deriv_embeddings_ele_xi_pair(eles, xis, derivs=(0, 0, 1))  # derivative in xi3 direction (R) wrt. w
                 v0, v1, v2 = v_map(xi1, xi2, xi3)
             else:
                 world_locs = mesh.evaluate_embeddings(eles, xis)  # world locations of the embedded points
                 # define xi directions based on deriv embeddings
-                xi1 = mesh.evaluate_deriv_embeddings(eles, xis, derivs=(1, 0, 0))  # derivative in xi1 direction (C) wrt.
-                xi2 = mesh.evaluate_deriv_embeddings(eles, xis, derivs=(0, 1, 0))  # derivative in xi2 direction (L) wrt.
-                xi3 = mesh.evaluate_deriv_embeddings(eles, xis, derivs=(0, 0, 1))  # derivative in xi3 direction (R) wrt.
+                xi1 = mesh.evaluate_deriv_embeddings(eles, xis, derivs=(0, 1, 0))  # derivative in xi1 direction (C) wrt. v
+                xi2 = mesh.evaluate_deriv_embeddings(eles, xis, derivs=(1, 0, 0))  # derivative in xi2 direction (L) wrt. u
+                xi3 = mesh.evaluate_deriv_embeddings(eles, xis, derivs=(0, 0, 1))  # derivative in xi3 direction (R) wrt. w
                 v0, v1, v2 = v_map(xi1, xi2, xi3)
-                
+
             return world_locs, v0, v1, v2
 
         def convert_to_clr(mesh, eles, xis, tensors):
-            _, v0, v1, v2 = get_clr_basis(mesh, eles, xis, ele_xi_pair=False)
-            fw_mat = np.linalg.inv(np.concatenate((
+            """
+            Function parsed into evaluate_strain_ele_xi_pair to convert the deformationtensors from material to local wall coordinates (CLR) at each embedded point.
+               
+            Note: only pre-multiplication of the basis vectors is needed to convert the deformation vectors from material to local wall coordinates.
+            If applying to a 3D tensor, e.g. E, post-multiplying by the transpose is required.
+            
+            """ 
+            _, v0, v1, v2 = get_clr_basis(mesh, eles, xis, ele_xi_pair=False)            
+            fw_mat = jnp.linalg.inv(jnp.concatenate((
                 v0[:, :, None],
                 v1[:, :, None],
                 v2[:, :, None],
-            ), axis=-1).astype('float64')).reshape(len(eles), -1, 3, 3)
+            ), axis=-1).astype('float64'))
 
-            spherical =  fw_mat @ tensors
+            spherical =  fw_mat @ tensors #Here is where you would also apply the post-multiplication if converting a 3D tensor, e.g. E, from material to local wall coordinates.
+
             return spherical
         
 
@@ -937,29 +942,13 @@ class CylinderModel:
         eles, xis = self.fitted_mesh.embed_points(jnp.array(self.strain_points))
         
         # Get the world coordinates of the strain points in fitted mesh
-        vs_world_undef = self.fitted_mesh.evaluate_ele_xi_pair_embeddings(eles, xis)
+        vs_world_undef = self.strain_points
 
         # Get the world coordinates of the strain points in geofit mesh
-        vs_world_def = self.geofit_mesh.evaluate_ele_xi_pair_embeddings(eles, xis)
+        vs_world_def = self.start_points
 
-        # Get the strain tensors in the local coordinate system at the strain points
-        vs = self.fitted_mesh.strain_tensor_in_ele_xi_pairs(self.geofit_mesh, eles, xis, convert_to_clr)
-
-
-        # # TEST: apply inverse rotation to the strain points to match the cylinder orientation
-        # rotation_matrix = np.array([
-        #     [0, 0, -1],  # new x = -old z
-        #     [0, 1, 0],   # new y = old x
-        #     [1, 0, 0]    # new z = old y
-        #     ])
-        
-        # strain_points_transformed = np.zeros_like(self.strain_points)
-        # for i in range(len(self.strain_points)):
-        #     # Apply the inverse rotation to each point
-        #     strain_points_transformed[i] = np.linalg.inv(rotation_matrix) @ np.array(self.strain_points[i])
-        # eles_transformed, xis_transformed = self.fitted_mesh.embed_points(jnp.array(strain_points_transformed))
-        
-        # vs = self.fitted_mesh.strain_tensor_in_ele_xi_pairs(self.geofit_mesh, eles_transformed, xis_transformed, convert_to_clr)/2
+        # Get the strain tensors in the local wall coordinate system at the strain points
+        vs = self.fitted_mesh.evaluate_strain_ele_xi_pair(eles, xis, self.geofit_mesh, convert_to_clr)        
 
         # Prepare the data for export
         strain_data = {
@@ -1011,26 +1000,27 @@ class CylinderModel:
 
     def draw_inner_contours(self, scene:pv.Plotter):
         """Draw inner/endo contours as blue dots."""
-        endo_pv = pv.PolyData(np.vstack(self.data.endo))
+        breakpoint()
+        endo_pv = pv.PolyData(np.vstack(list(self.data.endo.values())))
         scene.add_mesh(endo_pv, color='blue', point_size=5, render_points_as_spheres=True, name='Endo Contour')
         scene.add_text("Endo Contours", font_size=15, color='blue', position=[0.01, 0.95], viewport=True)
 
     def draw_outer_contours(self, scene:pv.Plotter):
         """Draw outer/epi contours as red dots."""
-        epi_pv = pv.PolyData(np.vstack(self.data.epi))
+        epi_pv = pv.PolyData(np.vstack(list(self.data.epi.values())))
         scene.add_mesh(epi_pv, color='red', point_size=5, render_points_as_spheres=True, name='Epi Contour')
         scene.add_text("Epi Contours", font_size=15, color='red', position=[0.01, 0.93], viewport=True)
 
     def draw_start_points(self, scene:pv.Plotter):
         """Draw start points as gray dots."""
         start_points_pv = pv.PolyData(np.vstack(self.start_points))
-        scene.add_mesh(start_points_pv, color='lightgray', point_size=10, render_points_as_spheres=True, name='Start Points')
+        scene.add_mesh(start_points_pv, color='lightgray', point_size=22, render_points_as_spheres=True, name='Start Points')
         scene.add_text("Start Points", font_size=15, color='gray', position=[0.01, 0.95], viewport=True)
 
     def draw_end_points(self, scene:pv.Plotter):
         """Draw end points as green dots."""
         end_points_pv = pv.PolyData(np.vstack(self.end_points))
-        scene.add_mesh(end_points_pv, color='green', point_size=10, render_points_as_spheres=True, name='End Points')
+        scene.add_mesh(end_points_pv, color='green', point_size=22, render_points_as_spheres=True, name='End Points')
         scene.add_text("End Points", font_size=15, color='green', position=[0.01, 0.93], viewport=True)
 
     def draw_displacement_arrows(self, scene:pv.Plotter):
@@ -1050,7 +1040,7 @@ class CylinderModel:
         end_points_pv = pv.PolyData(np.vstack(self.end_points))
         end_points_pv["vectors"] = np.vstack(self.fitted_errors[:self.end_points.shape[0]])
         end_points_pv["error_magnitude"] = fitted_error_mag[:self.end_points.shape[0]]
-        arrows = end_points_pv.glyph(orient="vectors", scale=10.0)
+        arrows = end_points_pv.glyph(orient="vectors", scale=1.0)
         scene.add_mesh(arrows, scalars="error_magnitude", cmap="jet", name='Residual Error Arrows', show_scalar_bar=False) 
         scene.add_text("Residual Errors", font_size=15, color='black', position=[0.01, 0.89], viewport=True)
         scene.add_scalar_bar(title="Error Magnitude", n_labels=5, position_x=0.25, width=0.5, title_font_size=30)
@@ -1058,7 +1048,7 @@ class CylinderModel:
     def draw_fitted_points(self, scene:pv.Plotter):
         """Draw model predicted points as blue dots."""
         fitted_points_pv = pv.PolyData(np.vstack(self.fitted_points))
-        scene.add_mesh(fitted_points_pv, color='blue', point_size=10, render_points_as_spheres=True, name='Fitted Points')
+        scene.add_mesh(fitted_points_pv, color='blue', point_size=22, render_points_as_spheres=True, name='Fitted Points')
         scene.add_text("Fitted Points", font_size=15, color='blue', position=[0.01, 0.87], viewport=True)
 
 
@@ -1195,7 +1185,7 @@ class CylinderModel:
                 # Plot residual errors as vector arrows using glyphs
                 self.draw_error_arrows(scene)
                 # Plot fitted points
-                self.draw_fitted_points(scene)
+                # self.draw_fitted_points(scene)
             # Plot origin point
             scene.add_points(pv.PolyData([0.0, 0.0, 0.0]), color='magenta', point_size=15, render_points_as_spheres=True, name='Origin')
             scene.add_text("Origin", font_size=15, color='magenta', position=[0.01, 0.97], viewport=True)
