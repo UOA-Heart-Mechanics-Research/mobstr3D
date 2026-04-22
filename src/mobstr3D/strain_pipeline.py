@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 from mobstr3D.utils.io import import_models
-from mobstr3D.utils.plot import plot_meshes_with_slider, plot_local_coordinate_axes_strain_points, plot_strains_colourmaps, plot_strains_2D_transmural, plot_strains_2D_transmural_xi
+from mobstr3D.utils.plot import plot_meshes_with_slider, plot_local_coordinate_axes_strain_points, plot_strains_2D_transmural_heatmap, plot_strains_2D_transmural_xi_heatmap, plot_strains_colourmaps, plot_strains_2D_transmural, plot_strains_2D_transmural_xi
 
 
 def perform_strain(config, mylogger):
@@ -74,7 +74,20 @@ def perform_strain(config, mylogger):
             else:
                 mylogger.info('Invalid transmural parameter selected for evaluating strains - check config - skipping transmural plots.')
 
-    
+        if config["strain"]["plot_strains_all_heatmap"]:
+            if config["strain"]["transmural_parameter"] == "radius":
+                # Plot transmural strain profiles using a computed radius
+                plot_strains_2D_transmural_heatmap(model)
+            elif config["strain"]["transmural_parameter"] == "xi3":
+                # Plot transmural strain profiles using xi3 as the radial material coordinate
+                plot_strains_2D_transmural_xi_heatmap(model)
+            elif config["strain"]["transmural_parameter"] == "normalised_radius":
+                # Plot transmural strain profiles using a computed radius normalized to 0-1 betweneen endo and epi
+                # plot_strains_2D_transmural_normalised(model)
+                mylogger.info('Normalised radius transmural parameter selected for evaluating strains. This is currently a WIP - change in config - skipping transmural plots.')
+            else:
+                mylogger.info('Invalid transmural parameter selected for evaluating strains - check config - skipping transmural plots.')
+
     # TODO # Optional: Perform strain-time analysis
     # if config["parameters"]["frames_to_fit"] == "all" and :
     #     model.perform_strain_time_analysis()

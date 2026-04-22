@@ -1,7 +1,10 @@
+import os
+from pathlib import Path
 import pyvista as pv
 import matplotlib.pyplot as plt
 import numpy as np
 import jax.numpy as jnp
+from matplotlib.colors import LogNorm
 
 
 def plot_geofit_meshes_with_slider(models):
@@ -356,6 +359,55 @@ def plot_strains_2D_transmural(model):
     plt.show()
 
 
+def plot_strains_2D_transmural_heatmap(model):
+    """
+    Plot all 6 strain components transmurally using a heatmap.
+
+    The function generates 6 subplots, each showing one of the strain components.
+    The strains are plotted in the world coordinates, with respect to radius.
+    The strains are visualised using a density heatmap, given large numbers of data points.
+
+    """
+
+    fig, axes = plt.subplots(2, 3, figsize=(14, 8))  # 2 rows, 3 columns
+
+    radii = np.sqrt(
+        (model.strains["Y"] - model.inputs.translation_vector[0]) ** 2 +
+        (model.strains["Z"] - model.inputs.translation_vector[1]) ** 2
+    )  # Assuming the first column is the radius
+
+    strain_names = ['Circumferential (Theta)', 'Longitudinal (Z)', 'Radial (R)', 'Circ-Long','Circ-Rad', 'Long-Rad']
+    strain_keys = ["E_cc", "E_ll", "E_rr", "E_cl", "E_cr", "E_lr"]  # Use dict keys
+
+    count = 0
+
+    for i in range(2):
+        for j in range(3):
+            ax = axes[i, j]
+            x = radii
+            y = model.strains[strain_keys[count]]  # Extract the strain component by key
+            gridsize = 50
+            cmap = plt.get_cmap('viridis')
+            bgc = cmap(0.0)
+            ax.set_facecolor(bgc)
+            ax.grid(True, alpha=0.5)
+            if i == 0:
+                hb = ax.hexbin(x, y, gridsize=gridsize, cmap=cmap, extent=[np.min(radii), np.max(radii), -0.4, 1.0])#, norm=LogNorm())
+            else:
+                hb = ax.hexbin(x, y, gridsize=gridsize, cmap=cmap, extent=[np.min(radii), np.max(radii), -0.2, 0.2])#, norm=LogNorm())
+            ax.set_xlabel('Radius (mm)')
+            if i == 0:
+                ax.set_ylim(-0.4, 1.0)  # Set y-limits
+            else:
+                ax.set_ylim(-0.2, 0.2)
+            ax.set_title(f'{strain_names[count]} Strain')
+            plt.colorbar(hb, ax=ax, label=f'Number of data points')
+            count += 1
+
+    plt.tight_layout()
+    plt.show()
+
+
 def plot_strains_2D_transmural_xi(model):
     """
     Plot all 6 strain components transmurally.
@@ -391,3 +443,287 @@ def plot_strains_2D_transmural_xi(model):
 
     plt.tight_layout()
     plt.show()
+
+
+def plot_strains_2D_transmural_xi_heatmap(model):
+    """
+    Plot all 6 strain components transmurally using a heatmap.
+
+    The function generates 6 subplots, each showing one of the strain components.
+    The strains are plotted in the world coordinates, with respect to radial material coordinate, xi3.
+    The strains are visualised using a density heatmap, given large numbers of data points.
+
+    """
+
+    fig, axes = plt.subplots(2, 3, figsize=(14, 8))  # 2 rows, 3 columns
+
+    _, xi = model.fitted_mesh.embed_points(jnp.array(model.strain_points))
+
+    strain_names = ['Circumferential (Theta)', 'Longitudinal (Z)', 'Radial (R)', 'Circ-Long','Circ-Rad', 'Long-Rad']
+    strain_keys = ["E_cc", "E_ll", "E_rr", "E_cl", "E_cr", "E_lr"]  # Use dict keys
+
+    count = 0
+
+    for i in range(2):
+        for j in range(3):
+            ax = axes[i, j]
+            x = xi[:, 2]  # radial material coordinate
+            y = model.strains[strain_keys[count]]  # Extract the strain component by key
+            gridsize = 50
+            cmap = plt.get_cmap('viridis')
+            bgc = cmap(0.0)
+            ax.set_facecolor(bgc)
+            ax.grid(True, alpha=0.5)
+            if i == 0:
+                hb = ax.hexbin(x, y, gridsize=gridsize, cmap=cmap, extent=[0, 1, -0.4, 1.0])#, norm=LogNorm())
+            else:
+                hb = ax.hexbin(x, y, gridsize=gridsize, cmap=cmap, extent=[0, 1, -0.2, 0.2])#, norm=LogNorm())
+            ax.set_xlabel('xi3 (radial material coordinate)')
+            if i == 0:
+                ax.set_ylim(-0.4, 1.0)  # Set y-limits
+            else:
+                ax.set_ylim(-0.2, 0.2)
+            ax.set_title(f'{strain_names[count]} Strain')
+            plt.colorbar(hb, ax=ax, label=f'Number of data points')
+            count += 1
+
+    plt.tight_layout()
+    plt.show()
+
+
+### SAVE MOVIES ###
+
+
+def save_contour_mov(epi_contours, endo_contours, nFrames, config, mylogger):
+    """
+    Save a movie of the contours across slices and frames if enabled in config.
+    """
+
+    # Define save path and filename for animation
+    save_dir = config["save_mov"]["output_dir"]
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    save_filename = "contours_all_slices.mp4"
+    save_path = Path(save_dir, save_filename)
+
+    # Fit axis limits to data from all slices
+    all_epi_list = []
+    for s_key in epi_contours:
+        for f_key in epi_contours[s_key]:
+            all_epi_list.append(epi_contours[s_key][f_key])
+    
+    all_epi = np.vstack(all_epi_list) if all_epi_list else np.empty((0, 3))
+
+    plotter = pv.Plotter(shape=(2, 2), off_screen=True)
+
+    # Dummy initialization to set bounds
+    if len(all_epi) > 0:
+        dummy_cloud_epi = pv.PolyData(all_epi)
+        
+        # Subplot (0, 0): 3D View
+        plotter.subplot(0, 0)
+        plotter.add_mesh(dummy_cloud_epi, color='black', opacity=0.0)
+        plotter.show_axes()
+        plotter.add_axes()
+        
+        # Subplot (0, 1): X-Y View
+        plotter.subplot(0, 1)
+        plotter.add_mesh(dummy_cloud_epi, color='black', opacity=0.0)
+        plotter.view_xy()
+        plotter.show_axes()
+        
+        # Subplot (1, 0): X-Z View
+        plotter.subplot(1, 0)
+        plotter.add_mesh(dummy_cloud_epi, color='black', opacity=0.0)
+        plotter.view_xz()
+        plotter.show_axes()
+        
+        # Subplot (1, 1): Y-Z View
+        plotter.subplot(1, 1)
+        plotter.add_mesh(dummy_cloud_epi, color='black', opacity=0.0)
+        plotter.view_yz()
+        plotter.show_axes()
+
+    plotter.open_movie(filename=str(save_path), framerate=6)
+
+    for frame_idx in range(nFrames):
+        frame_key = str(frame_idx + config["parameters"]["frame_of_seed"])
+        
+        # Combine epi and endo points from all slices for this frame
+        curr_epi = []
+        curr_endo = []
+        for s_key in epi_contours:
+            if frame_key in epi_contours[s_key]:
+                curr_epi.append(epi_contours[s_key][frame_key])
+        for s_key in endo_contours:
+            if frame_key in endo_contours[s_key]:
+                curr_endo.append(endo_contours[s_key][frame_key])
+
+        if curr_epi and curr_endo:
+            epi = np.vstack(curr_epi)
+            endo = np.vstack(curr_endo)
+            
+            cloud_epi = pv.PolyData(epi)
+            cloud_endo = pv.PolyData(endo)
+            
+            actors = []
+            
+            # Subplot 0, 0
+            plotter.subplot(0, 0)
+            actors.append(plotter.add_mesh(cloud_epi, render_points_as_spheres=True, point_size=6.0, color="blue", name="points_0_epi"))
+            actors.append(plotter.add_mesh(cloud_endo, render_points_as_spheres=True, point_size=6.0, color="red", name="points_0_endo"))
+            plotter.add_text(f'Extracted Contours - All Slices Frame {frame_key}', name='title_0', font_size=10)
+            
+            # Subplot 0, 1
+            plotter.subplot(0, 1)
+            actors.append(plotter.add_mesh(cloud_epi, render_points_as_spheres=True, point_size=6.0, color="blue", name="points_1_epi"))
+            actors.append(plotter.add_mesh(cloud_endo, render_points_as_spheres=True, point_size=6.0, color="red", name="points_1_endo"))
+            plotter.add_text('X-Y View', name='title_1', font_size=6)
+            
+            # Subplot 1, 0
+            plotter.subplot(1, 0)
+            actors.append(plotter.add_mesh(cloud_epi, render_points_as_spheres=True, point_size=6.0, color="blue", name="points_2_epi"))
+            actors.append(plotter.add_mesh(cloud_endo, render_points_as_spheres=True, point_size=6.0, color="red", name="points_2_endo"))
+            plotter.add_text('X-Z View', name='title_2', font_size=6)
+            
+            # Subplot 1, 1
+            plotter.subplot(1, 1)
+            actors.append(plotter.add_mesh(cloud_epi, render_points_as_spheres=True, point_size=6.0, color="blue", name="points_3_epi"))
+            actors.append(plotter.add_mesh(cloud_endo, render_points_as_spheres=True, point_size=6.0, color="red", name="points_3_endo"))
+            plotter.add_text('Y-Z View', name='title_3', font_size=6)
+            
+            plotter.write_frame()
+            
+            # Remove actors
+            plotter.subplot(0, 0)
+            plotter.remove_actor(actors[0])
+            plotter.subplot(0, 1)
+            plotter.remove_actor(actors[1])
+            plotter.subplot(1, 0)
+            plotter.remove_actor(actors[2])
+            plotter.subplot(1, 1)
+            plotter.remove_actor(actors[3])
+
+    plotter.close()
+
+
+
+def save_displacement_mov(locations, displacements, nFrames, config, mylogger):
+    """
+    Save a movie of the displacements across slices and frames if enabled in config.
+    """
+
+    # Define save path and filename for animation
+    save_dir = config["save_mov"]["output_dir"]
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    save_filename = "displacements_all_slices.mp4"
+    save_path = Path(save_dir, save_filename)
+
+    # Fit axis limits to data from all slices
+    all_locs_list = []
+    all_disps_list = []
+    for s_key in locations:
+        for f_key in locations[s_key]:
+            all_locs_list.append(locations[s_key][f_key])
+            all_disps_list.append(displacements[s_key][f_key])
+    
+    all_locs = np.vstack(all_locs_list) if all_locs_list else np.empty((0, 3))
+    all_disps = np.vstack(all_disps_list) if all_disps_list else np.empty((0, 3))
+
+    # Find max displacement magnitude for consistent color scale
+    max_disp_mag = 0.0
+    if len(all_disps) > 0:
+        max_disp_mag = np.max(np.linalg.norm(all_disps, axis=1))
+
+    plotter = pv.Plotter(shape=(2, 2), off_screen=True)
+
+    # Dummy initialization to set bounds
+    if len(all_locs) > 0:
+        dummy_cloud = pv.PolyData(all_locs)
+        
+        # Subplot (0, 0): 3D View
+        plotter.subplot(0, 0)
+        plotter.add_mesh(dummy_cloud, color='black', opacity=0.0)
+        plotter.show_axes()
+        plotter.add_axes()
+        
+        # Subplot (0, 1): X-Y View
+        plotter.subplot(0, 1)
+        plotter.add_mesh(dummy_cloud, color='black', opacity=0.0)
+        plotter.view_xy()
+        plotter.show_axes()
+        
+        # Subplot (1, 0): X-Z View
+        plotter.subplot(1, 0)
+        plotter.add_mesh(dummy_cloud, color='black', opacity=0.0)
+        plotter.view_xz()
+        plotter.show_axes()
+        
+        # Subplot (1, 1): Y-Z View
+        plotter.subplot(1, 1)
+        plotter.add_mesh(dummy_cloud, color='black', opacity=0.0)
+        plotter.view_yz()
+        plotter.show_axes()
+
+    plotter.open_movie(filename=str(save_path), framerate=6)
+
+    for frame_idx in range(nFrames):
+        frame_key = str(frame_idx + config["parameters"]["frame_of_seed"])
+        
+        # Combine locs and disps from all slices for this frame
+        curr_locs = []
+        curr_disps = []
+        for s_key in locations:
+            if frame_key in locations[s_key] and frame_key in displacements[s_key]:
+                curr_locs.append(locations[s_key][frame_key])
+                curr_disps.append(displacements[s_key][frame_key])
+        
+        if curr_locs and curr_disps:
+            locs = np.vstack(curr_locs)
+            disps = np.vstack(curr_disps)
+            
+            cloud = pv.PolyData(locs)
+            cloud["vectors"] = -disps  # Pyvista arrows
+            
+            # Calculate scalar magnitude for coloring
+            cloud["Magnitude"] = np.linalg.norm(disps, axis=1)
+            
+            cloud.set_active_vectors("vectors")
+            arrows = cloud.glyph(orient="vectors", scale="vectors", factor=1.0)
+            
+            actors = []
+            
+            # Subplot 0, 0
+            plotter.subplot(0, 0)
+            actors.append(plotter.add_mesh(arrows, scalars="Magnitude", clim=[0, max_disp_mag], cmap="jet", name="arrows_0"))
+            plotter.add_text(f'Extracted Displacements - All Slices Frame {frame_key}', name='title_0', font_size=10)
+            
+            # Subplot 0, 1
+            plotter.subplot(0, 1)
+            actors.append(plotter.add_mesh(arrows, scalars="Magnitude", clim=[0, max_disp_mag], cmap="jet", name="arrows_1"))
+            plotter.add_text('X-Y View', name='title_1', font_size=6)
+            
+            # Subplot 1, 0
+            plotter.subplot(1, 0)
+            actors.append(plotter.add_mesh(arrows, scalars="Magnitude", clim=[0, max_disp_mag], cmap="jet", name="arrows_2"))
+            plotter.add_text('X-Z View', name='title_2', font_size=6)
+            
+            # Subplot 1, 1
+            plotter.subplot(1, 1)
+            actors.append(plotter.add_mesh(arrows, scalars="Magnitude", clim=[0, max_disp_mag], cmap="jet", name="arrows_3"))
+            plotter.add_text('Y-Z View', name='title_3', font_size=6)
+            
+            plotter.write_frame()
+            
+            # Remove actors
+            plotter.subplot(0, 0)
+            plotter.remove_actor(actors[0])
+            plotter.subplot(0, 1)
+            plotter.remove_actor(actors[1])
+            plotter.subplot(1, 0)
+            plotter.remove_actor(actors[2])
+            plotter.subplot(1, 1)
+            plotter.remove_actor(actors[3])
+
+    plotter.close()

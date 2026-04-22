@@ -1,17 +1,20 @@
+import os
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 import json
 from pathlib import Path
 import pydicom
 from scipy.signal import convolve2d
 import nibabel as nib
+import pyvista as pv
 
 from mobstr3D.preprocessing.DICOM.index_inputs import get_slice_location
 
 
 
-def calc_phase_quality_2D(w_phase, pixel_size, mask, connectivity, config, mylogger):
+def calc_phase_quality_2D(w_phase, pixel_size, mask, connectivity, slice_key, frame_idx, config, mylogger):
         
     """
     Phase Quality 2D
@@ -125,11 +128,11 @@ def calc_phase_quality_2D(w_phase, pixel_size, mask, connectivity, config, mylog
         plt.colorbar(im0, ax=axs[0])
         axs[0].set_title('Wrapped Phase Image')
 
-        im1 = axs[1].imshow(qual, cmap='gray', vmin=0, vmax=1)
+        im1 = axs[1].imshow(qual, cmap='viridis', vmin=0, vmax=1)
         plt.colorbar(im1, ax=axs[1])
         axs[1].set_title('Phase Quality Map')
 
-        plt.suptitle('Initial Phase Quality Calculation [DEBUG]')
+        plt.suptitle(f'Initial Phase Quality Calculation - {slice_key} Frame {frame_idx + config["parameters"]["frame_of_seed"]} [DEBUG]')
         plt.show()
 
     return qual
@@ -163,7 +166,7 @@ def unwrap_2element_scalar(p0, p1):
 
 
 
-def unwrap_phase_2d_floodfill(w_phase, args, config, mylogger, seed_point=None):
+def unwrap_phase_2d_floodfill(w_phase, args, frame_idx, phase_key, config, mylogger, seed_point=None):
     
     """
     Phase Unwrapping using Flood-Fill Algorithm
@@ -207,7 +210,7 @@ def unwrap_phase_2d_floodfill(w_phase, args, config, mylogger, seed_point=None):
     
 
     ### CALCULATE PHASE QUALITY ###
-    qual = calc_phase_quality_2D(w_phase, args["pixel_size"], mask, args["connectivity"], config, mylogger)
+    qual = calc_phase_quality_2D(w_phase, args["pixel_size"], mask, args["connectivity"], args["slice_key"], frame_idx, config, mylogger)
 
     ### SELECT SEED POINT ###
     if seed_point is None:
@@ -292,7 +295,7 @@ def unwrap_phase_2d_floodfill(w_phase, args, config, mylogger, seed_point=None):
         fig, ax = plt.subplots(1, 2, figsize=(10, 6))
         im = ax[0].imshow(uw_phase, cmap='gray')
         fig.colorbar(im, ax=ax[0])
-        ax[0].set_title('Phase Unwrapping Progress [DEBUG]')
+        ax[0].set_title('Phase Unwrapping Result [DEBUG]')
         # Define new image for progress quality map
         # Background set to black, masked pixels set to blue, adjoin pixels set to red, unwrapped pixels set to white
         uw_progress_img = np.zeros((*w_phase.shape, 3), dtype=np.float32)
@@ -300,8 +303,8 @@ def unwrap_phase_2d_floodfill(w_phase, args, config, mylogger, seed_point=None):
         uw_progress_img[:, :, 1] = is_unwrap.astype(np.float32) * 1.0  # Green channel for unwrapped
         uw_progress_img[:, :, 2] = (~mask).astype(np.float32) * 0.5  # Blue channel for masked
         im_p = ax[1].imshow(uw_progress_img)
-        fig.colorbar(im_p, ax=ax[1])
-        ax[1].set_title('Phase Quality Map [DEBUG]')
+        #fig.colorbar(im_p, ax=ax[1])
+        ax[1].set_title('Phase Unwrapping Adjoin Map [DEBUG]')
         plt.show()
 
     # Flood-fill unwrapping loop, loop until no adjoined pixels remain
@@ -385,7 +388,7 @@ def unwrap_phase_2d_floodfill(w_phase, args, config, mylogger, seed_point=None):
     
     # Confirm all masked values were unwrapped
     if any(mask.ravel() != ~np.isnan(uw_phase.ravel())):
-        mylogger.warning('Not all masked pixels were unwrapped.')
+        mylogger.warning(f'Not all masked pixels were unwrapped [{args["slice_key"]}, Frame {frame_idx + config["parameters"]["frame_of_seed"]}, Phase {phase_key}].')
 
     # Debug: close persistent plot
     if config["debug_flags"]["debug_phaseunwrapping"] and fig is not None:
@@ -397,7 +400,7 @@ def unwrap_phase_2d_floodfill(w_phase, args, config, mylogger, seed_point=None):
 
 
 
-def unwrap_phase_3d_floodfill(w_phase_3D, args, config, mylogger, seed_point_3D=None):
+def unwrap_phase_3d_floodfill(w_phase_3D, args, phase_key, config, mylogger, seed_point_3D=None):
     
     """
     Phase Unwrapping using Flood-Fill Algorithm
@@ -463,7 +466,7 @@ def unwrap_phase_3d_floodfill(w_phase_3D, args, config, mylogger, seed_point_3D=
             mask_2D = np.ones(w_phase_2D.shape, dtype=bool)
 
         # Calculate phase quality for current frame
-        qual = calc_phase_quality_2D(w_phase_2D, args["pixel_size"], mask_2D, args["connectivity"], config, mylogger)
+        qual = calc_phase_quality_2D(w_phase_2D, args["pixel_size"], mask_2D, args["connectivity"], args["slice_key"], frame_idx, config, mylogger)
 
         # Store unwrapped 2D qual back into 3D array
         qual_3D[:, :, frame_idx] = qual
@@ -478,13 +481,16 @@ def unwrap_phase_3d_floodfill(w_phase_3D, args, config, mylogger, seed_point_3D=
         mask = mask_3D[:, :, 0]
         
         if args["seed"] == 'auto':
+            
             # Find maximum quality point within mask
             qual_masked = np.copy(qual)
             qual_masked[~mask] = -np.inf
             seed_idx = np.unravel_index(np.argmax(qual_masked), qual_masked.shape)
-            seed_point = (int(round(seed_idx[1])), int(round(seed_idx[0])))  # Convert to (row, col)
+            seed_point = (int(round(seed_idx[0])), int(round(seed_idx[1])))  # Convert to (row, col)
             mylogger.info(f'Automatically selected seed point at {seed_point} on frame {frames[0]} with quality {qual[seed_point]:.4f}.')
+        
         elif args["seed"] == 'manual':
+            
             # Plot phase quality map for manual seed selection
             fig, ax = plt.subplots()
             im = ax.imshow(qual, cmap='viridis', vmin=0, vmax=1)
@@ -494,7 +500,9 @@ def unwrap_phase_3d_floodfill(w_phase_3D, args, config, mylogger, seed_point_3D=
             seed_point = (int(round(seed_point[1])), int(round(seed_point[0])))  # Convert to (row, col)
             plt.close(fig)
             mylogger.info(f'Manually selected seed point at {seed_point} on frame {frames[0]} with quality {qual[seed_point]:.4f}.')
+        
         else:
+            
             mylogger.error('Seed selection method must be "auto" or "manual".')
             sys.exit(1)
 
@@ -688,7 +696,7 @@ def unwrap_phase_3d_floodfill(w_phase_3D, args, config, mylogger, seed_point_3D=
                 fig, ax = plt.subplots(1, 3, figsize=(15, 6))
                 im = ax[0].imshow(temp_uw_phase_3D[:, :, fr0], cmap='gray')
                 fig.colorbar(im, ax=ax[0])
-                ax[0].set_title('Phase Unwrapping Progress [DEBUG]')
+                ax[0].set_title('Phase Unwrapping Result [DEBUG]')
                 # Define new image for progress quality map
                 # Background set to black, masked pixels set to blue, adjoin pixels set to red, unwrapped pixels set to white
                 uw_progress_img_fr0 = np.zeros((*w_phase_3D.shape[0:2], 3), dtype=np.float32)
@@ -697,7 +705,7 @@ def unwrap_phase_3d_floodfill(w_phase_3D, args, config, mylogger, seed_point_3D=
                 uw_progress_img_fr0[:, :, 2] = (~mask_3D[:, :, fr0]).astype(np.float32) * 0.5  # Blue channel for masked
                 im_p0 = ax[1].imshow(uw_progress_img_fr0)
                 fig.colorbar(im_p0, ax=ax[1])
-                ax[1].set_title('Phase Quality Map [DEBUG]')
+                ax[1].set_title('Phase Unwrapping Adjoin Map - Frame 0 [DEBUG]')
                 # Define new image for progress quality map
                 # Background set to black, masked pixels set to blue, adjoin pixels set to red, unwrapped pixels set to white
                 uw_progress_img_fr1 = np.zeros((*w_phase_3D.shape[0:2], 3), dtype=np.float32)
@@ -706,7 +714,7 @@ def unwrap_phase_3d_floodfill(w_phase_3D, args, config, mylogger, seed_point_3D=
                 uw_progress_img_fr1[:, :, 2] = (~mask_3D[:, :, fr1]).astype(np.float32) * 0.5  # Blue channel for masked
                 im_p1 = ax[2].imshow(uw_progress_img_fr1)
                 fig.colorbar(im_p1, ax=ax[2])
-                ax[2].set_title('Phase Quality Map [DEBUG]')
+                ax[2].set_title('Phase Unwrapping Adjoin Map - Frame 1 [DEBUG]')
 
                 plt.show()
 
@@ -906,7 +914,8 @@ def unwrap_phase_3d_floodfill(w_phase_3D, args, config, mylogger, seed_point_3D=
     missing_frames = np.where(~has_unwrapped)[0]
 
     if missing_frames.size > 0:
-        mylogger.error(f"Unwrapping failed: no unwrapped pixels in frames {missing_frames}")
+        mylogger.error(f"Unwrapping failed: no unwrapped pixels in frames {missing_frames + config['parameters']['frame_of_seed']}.")
+        breakpoint()  # Set breakpoint for debugging
         sys.exit(1)
 
     mylogger.info('Unwrapped pixels found on all frames! Initial 3D flood-fill phase unwrapping completed successfully.')
@@ -945,7 +954,7 @@ def unwrap_phase_3d_floodfill(w_phase_3D, args, config, mylogger, seed_point_3D=
         args["mask"] = mask
 
         # Unwrap phase using 2D flood-fill algorithm
-        seed_point, qual, uw_phase = unwrap_phase_2d_floodfill(w_phase, args, config, mylogger, seed_point)
+        seed_point, qual, uw_phase = unwrap_phase_2d_floodfill(w_phase, args, frame_idx, phase_key, config, mylogger, seed_point)
 
         # Store unwrapped 2D phase and quality back into 3D arrays
         uw_phase_3D[:, :, frame_idx] = uw_phase
@@ -987,9 +996,9 @@ def extract_displacements(config, imaging_parameters, flagInverted, nSlices, nFr
     for mask_idx, mask in enumerate(sorted_masks):
         
         # Get slice index from mask filename "*_ID_'slice0''frame00'.nii.gz"
-        slice_idx = int(mask.name.split("_")[3].split(".")[0][0])
+        slice_idx = int(mask.name.split("_")[-1].split(".")[0][0:2])
         # Get frame index from mask filename "*_ID_'slice0''frame00'.nii.gz"
-        frame_idx = int(mask.name.split("_")[3].split(".")[0][1:])
+        frame_idx = int(mask.name.split("_")[-1].split(".")[0][2:])
 
         if mask_idx == 0:
             # Get array shape from mask
@@ -1040,7 +1049,7 @@ def extract_displacements(config, imaging_parameters, flagInverted, nSlices, nFr
 
         # Check frame indices match
         if frame_idx != search_frame_idx:
-            mylogger.error(f'Frame index mismatch between mask and DENSE series index for slice {slice_idx}, frame {frame_idx}.')
+            mylogger.error(f'Frame index mismatch between mask and DENSE series index for slice {slice_idx}, frame {frame_idx}. Search frame index: {search_frame_idx}')
             sys.exit(1)
 
         frame_idx_array = frame_idx - config["parameters"]["frame_of_seed"]
@@ -1080,16 +1089,17 @@ def extract_displacements(config, imaging_parameters, flagInverted, nSlices, nFr
             "pixel_size": np.array(imaging_parameters["PixelSpacing"]),
             "seed": config["preprocessing_unwrapping"]["seed_point_selection"],  #default to manual seed selection for DENSE phase images - auto|manual
             "connectivity": 4,  #default to 4-connectivity for 2D unwrapping of DENSE phase images
-            "searchradius": 2  #pixels - only used for 3D unwrapping
+            "searchradius": 2,  #pixels - only used for 3D unwrapping
+            "slice_key": slice_key
         }
 
         # Initialise seed point
         seed_point_3D = None
 
         # Initial phase unwrap
-        seed_point_3D, qual_xpha_3D, uw_phase_xpha_3D = unwrap_phase_3d_floodfill(img_xpha_3D, args, config, mylogger, seed_point_3D)
-        seed_point_3D, qual_ypha_3D, uw_phase_ypha_3D = unwrap_phase_3d_floodfill(img_ypha_3D, args, config, mylogger, seed_point_3D)
-        seed_point_3D, qual_zpha_3D, uw_phase_zpha_3D = unwrap_phase_3d_floodfill(img_zpha_3D, args, config, mylogger, seed_point_3D)
+        seed_point_3D, qual_xpha_3D, uw_phase_xpha_3D = unwrap_phase_3d_floodfill(img_xpha_3D, args, phase_key="x", config=config, mylogger=mylogger, seed_point_3D=seed_point_3D)
+        seed_point_3D, qual_ypha_3D, uw_phase_ypha_3D = unwrap_phase_3d_floodfill(img_ypha_3D, args, phase_key="y", config=config, mylogger=mylogger, seed_point_3D=seed_point_3D)
+        seed_point_3D, qual_zpha_3D, uw_phase_zpha_3D = unwrap_phase_3d_floodfill(img_zpha_3D, args, phase_key="z", config=config, mylogger=mylogger, seed_point_3D=seed_point_3D)
 
         # Loop through frames to process 3D unwrapped phase images
         for frame_idx, frame in enumerate(range(config["parameters"]["frame_of_seed"], nFrames + config["parameters"]["frame_of_seed"])):
@@ -1220,10 +1230,43 @@ def extract_displacements(config, imaging_parameters, flagInverted, nSlices, nFr
                 plt.axis('equal')
                 plt.show()
 
+        if config["debug_flags"]["debug_displacements_mov"]:
+            mylogger.info('Creating displacement quiver plot animation for debugging...')
+            # Create animation of quiver plots across frames
+            fig = plt.figure(figsize=(10, 8))
+            ax = fig.add_subplot(111, projection='3d')
+
+            # Fit axis limits to data
+            all_locs = np.vstack(list(locations[slice_key].values()))
+            all_disps = np.vstack(list(displacements[slice_key].values()))
+            all_points = np.vstack((all_locs, all_locs - all_disps))
+
+            def update_quiver(frame_idx):
+                ax.clear()
+                frame_key = str(frame_idx + config["parameters"]["frame_of_seed"])
+                if frame_key in locations[slice_key] and frame_key in displacements[slice_key]:
+                    locs = locations[slice_key][frame_key]
+                    disps = displacements[slice_key][frame_key]
+                    ax.quiver(locs[:, 0], locs[:, 1], locs[:, 2],
+                            -disps[:, 0], -disps[:, 1], -disps[:, 2])
+                    ax.set_xlim([all_points[:, 0].min() - 10, all_points[:, 0].max() + 10])
+                    ax.set_ylim([all_points[:, 1].min() - 10, all_points[:, 1].max() + 10])
+                    ax.set_zlim([all_points[:, 2].min() - 10, all_points[:, 2].max() + 10])
+                    plt.axis('equal')
+                    ax.set_xlabel('X (mm)')
+                    ax.set_ylabel('Y (mm)')
+                    ax.set_zlabel('Z (mm)')
+                    ax.set_title(f'Extracted Displacements - {slice_key} Frame {frame_key} [DEBUG]')
+
+            anim = FuncAnimation(fig, update_quiver, frames=nFrames, repeat=True)
+            plt.show()
+
+            # Manual stop after closing - to prevent freeze
+            del anim
 
     # # Verification: dump extracted locations and displacements to matfile for denseanalysis comparison
     # from scipy.io import savemat
-    # savemat('dev/testing_2026_1jan/2026_01_22_verifying-displacements-denseanalysis/debug_extracted_displacements.mat', {
+    # savemat('../debug_extracted_displacements.mat', {
     #     'locations_ics': np.array(locs),
     #     'displacements_ics': np.array(disps),
     #     'uw_phase_xpha': uw_phase_xpha,

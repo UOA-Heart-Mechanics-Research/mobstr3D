@@ -13,7 +13,7 @@ version = "1.0.0"
 # * true    : Run this module
 # * false    : Do not run this module
 
-preprocessing = false
+preprocessing = true
 fitting = true
 strain_extraction = true
 
@@ -113,7 +113,7 @@ seed_point_selection = "auto"
 
 [preprocessing_slicecorrection]
 
-# Define the segmentation model to be used for segmenting the DICOM images
+# Define the slice correction method to be used in adjusting data to correct for breath hold misalignment
 # Allowed values:
 # * "none"                  : No slice correction applied
 # * "contour_centroid"      : Crude method, aligning slices based on epicardial contour centroid
@@ -191,7 +191,7 @@ geo_sobprior_weight = 0.1
 # * "sobprior"        : Penalise deviation away from an initial input mesh #WIP
 # * "incompressible"  : Penalise against volume changes #WIP
 # Default: "none"
-ffd_smoothing = "sob"
+ffd_smoothing = "none"
 
 # Define smoothing weights when applying Sobolev smoothing on the ffd fit
 # Note: only applied when set by ffd_smoothing above
@@ -242,7 +242,23 @@ transmural_parameter = "xi3"
 
 # Flags to turn on/off plotting of strain results (disable when batch preprocessing)
 plot_strains_all = true
+plot_strains_all_heatmap = false
 plot_wall_vectors = false    #mostly for debugging
+
+
+
+### SAVE MOVIES ###
+
+
+[save_mov]
+
+# Define the movies to be saved.
+contours_mov = true
+displacements_mov = true
+
+# Define the directory for output of the saved movies.
+# Default: "data/example/example_human_data/movies_denseanalysis"
+output_dir = "data/example/example_human_data/movies_dicom"
 
 
 
@@ -258,7 +274,7 @@ show_detailed_logging = true
 
 # Decide whether or not to save the log files. If true, a .log file will be generated.
 # Default: true
-generate_log_file = true
+generate_log_file = false #WIP
 
 # Define the directory for output of log files.
 # Default: "data/example/example_human_data/logs_denseanalysis"
@@ -277,3 +293,5 @@ debug_seedframe = false
 debug_phasequality = false
 debug_phaseunwrapping = false
 debug_displacements = false
+debug_displacements_mov = false
+

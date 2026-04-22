@@ -30,6 +30,8 @@ def load_dicom_img(file_path, mylogger):
         ds = pydicom.dcmread(file_path)
         img = ds.pixel_array
         caseID = getattr(ds, "PatientID", "UnknownPatient")
+        if caseID == "":
+            caseID = "UnknownPatient"
         mylogger.info(f'Loaded DICOM image from "{file_path}".')
         return img, caseID
     except Exception as e:
@@ -67,7 +69,7 @@ def prep_segmentation(config, DENSE_series_index, mylogger):
             affine = np.eye(4)
             nii_img = nib.Nifti1Image(dicom_img, affine)
             # Format naming for nnU-Netv2 - where the first index is slice_id and last is frame_number
-            nifti_filename = f"{caseID}_{slice_idx:01d}{frame_idx:02d}"
+            nifti_filename = f"{caseID}_{slice_idx:02d}{frame_idx:02d}"
 
             nib.save(nii_img, os.path.join(output_dir, f"{nifti_filename}_0000.nii.gz"))
 

@@ -631,6 +631,8 @@ class CylinderModel:
         This function performs the geometric fitting process by calling setup_geofit and running the optimization.
         """
 
+        mylogger.info(f'Geometric: starting fit...')
+
         self.geofit_mesh = deepcopy(self.template_mesh)
 
         func, jac, init_params, update_func = self.setup_geofit(mylogger) # Change this to setup_geofit_surf2contour for surf2contour fitting
@@ -649,10 +651,14 @@ class CylinderModel:
         self.geofit_RMSE = np.sqrt(np.mean(mag_error**2))
         mylogger.info(f"Geometric Fit Root Mean Squared Error: {self.geofit_RMSE:.6f}")
 
+        # Print root mean squared error - non-euclidian (i.e. using the actual distance between the points rather than the vector difference)
+        NE_geofit_RMSE = np.sqrt(np.mean(self.geofit_errors**2))
+        mylogger.info(f"Geometric Fit Root Mean Squared Error (non-euclidian): {NE_geofit_RMSE:.6f}")
+
         # Undo fixing of parameters and regenerates mesh
         self.geofit_mesh.unfix_mesh()
 
-        #self.geofit_mesh = deepcopy(self.template_mesh) # This is a hot fix to skip geofit mesh fitting when observing computational phantom
+        #self.geofit_mesh = deepcopy(self.template_mesh) # This is a hot fix to skip geofit mesh fitting as required; e.g. when observing the computational phantom
 
         return self
     
@@ -790,6 +796,9 @@ class CylinderModel:
         Uses least squares optimization to fit the mesh to the target points.
         Uses the function and jacobian provided by the setup_FFD function.
         """
+
+        mylogger.info(f'FFD: starting fit...')
+
         # Make a copy of the mesh to avoid modifying the original
         self.fitted_mesh = deepcopy(self.geofit_mesh)
 
@@ -811,7 +820,7 @@ class CylinderModel:
         self.fitted_RMSE = np.sqrt(np.mean(mag_error**2))
         mylogger.info(f"FFD Fit Root Mean Squared Error: {self.fitted_RMSE:.6f}")
 
-        # Print root mean squared error
+        # Print root mean squared error - non-euclidian (i.e. using the actual distance between the points rather than the vector difference)
         NE_fitted_RMSE = np.sqrt(np.mean(self.fitted_errors**2))
         mylogger.info(f"FFD Fit Root Mean Squared Error (non-euclidian): {NE_fitted_RMSE:.6f}")
 
@@ -948,7 +957,7 @@ class CylinderModel:
         vs_world_def = self.start_points
 
         # Get the strain tensors in the local wall coordinate system at the strain points
-        vs = self.fitted_mesh.evaluate_strain_ele_xi_pair(eles, xis, self.geofit_mesh, convert_to_clr)        
+        vs = self.fitted_mesh.evaluate_strain_ele_xi_pair(eles, xis, self.geofit_mesh, convert_to_clr)
 
         # Prepare the data for export
         strain_data = {
@@ -959,12 +968,15 @@ class CylinderModel:
             'x': vs_world_def[:, 0],
             'y': vs_world_def[:, 1],
             'z': vs_world_def[:, 2],
+            'xi1': xis[:, 0],
+            'xi2': xis[:, 1],
+            'xi3': xis[:, 2],
             'E_cc': vs[:, 0, 0],
             'E_ll': vs[:, 1, 1],
             'E_rr': vs[:, 2, 2],
             'E_cl': vs[:, 0, 1],
             'E_cr': vs[:, 0, 2],
-            'E_lr': vs[:, 1, 2],
+            'E_lr': vs[:, 1, 2]
         }
 
         self.strains = strain_data
@@ -1000,27 +1012,26 @@ class CylinderModel:
 
     def draw_inner_contours(self, scene:pv.Plotter):
         """Draw inner/endo contours as blue dots."""
-        breakpoint()
         endo_pv = pv.PolyData(np.vstack(list(self.data.endo.values())))
-        scene.add_mesh(endo_pv, color='blue', point_size=5, render_points_as_spheres=True, name='Endo Contour')
-        scene.add_text("Endo Contours", font_size=15, color='blue', position=[0.01, 0.95], viewport=True)
+        scene.add_mesh(endo_pv, color='red', point_size=12, render_points_as_spheres=True, name='Endo Contour')
+        scene.add_text("Endo Contours", font_size=15, color='red', position=[0.01, 0.95], viewport=True)
 
     def draw_outer_contours(self, scene:pv.Plotter):
         """Draw outer/epi contours as red dots."""
         epi_pv = pv.PolyData(np.vstack(list(self.data.epi.values())))
-        scene.add_mesh(epi_pv, color='red', point_size=5, render_points_as_spheres=True, name='Epi Contour')
-        scene.add_text("Epi Contours", font_size=15, color='red', position=[0.01, 0.93], viewport=True)
+        scene.add_mesh(epi_pv, color='blue', point_size=12, render_points_as_spheres=True, name='Epi Contour')
+        scene.add_text("Epi Contours", font_size=15, color='blue', position=[0.01, 0.93], viewport=True)
 
     def draw_start_points(self, scene:pv.Plotter):
         """Draw start points as gray dots."""
         start_points_pv = pv.PolyData(np.vstack(self.start_points))
-        scene.add_mesh(start_points_pv, color='lightgray', point_size=22, render_points_as_spheres=True, name='Start Points')
+        scene.add_mesh(start_points_pv, color='lightgray', point_size=12, render_points_as_spheres=True, name='Start Points')
         scene.add_text("Start Points", font_size=15, color='gray', position=[0.01, 0.95], viewport=True)
 
     def draw_end_points(self, scene:pv.Plotter):
         """Draw end points as green dots."""
         end_points_pv = pv.PolyData(np.vstack(self.end_points))
-        scene.add_mesh(end_points_pv, color='green', point_size=22, render_points_as_spheres=True, name='End Points')
+        scene.add_mesh(end_points_pv, color='green', point_size=12, render_points_as_spheres=True, name='End Points')
         scene.add_text("End Points", font_size=15, color='green', position=[0.01, 0.93], viewport=True)
 
     def draw_displacement_arrows(self, scene:pv.Plotter):
@@ -1048,7 +1059,7 @@ class CylinderModel:
     def draw_fitted_points(self, scene:pv.Plotter):
         """Draw model predicted points as blue dots."""
         fitted_points_pv = pv.PolyData(np.vstack(self.fitted_points))
-        scene.add_mesh(fitted_points_pv, color='blue', point_size=22, render_points_as_spheres=True, name='Fitted Points')
+        scene.add_mesh(fitted_points_pv, color='blue', point_size=12, render_points_as_spheres=True, name='Fitted Points')
         scene.add_text("Fitted Points", font_size=15, color='blue', position=[0.01, 0.87], viewport=True)
 
 
@@ -1060,7 +1071,7 @@ class CylinderModel:
         """
 
         scene = pv.Plotter()
-        self.template_mesh.plot(scene)
+        self.template_mesh.plot(scene, node_colour='grey')
         scene.add_points(pv.PolyData([0.0, 0.0, 0.0]), color='magenta', point_size=15, render_points_as_spheres=True, name='Origin')
         scene.add_text("Origin", font_size=15, color='magenta', position=[0.01, 0.97], viewport=True)
         scene.add_axes()
@@ -1074,7 +1085,7 @@ class CylinderModel:
         """
 
         scene = pv.Plotter()
-        self.template_mesh.plot(scene)
+        self.template_mesh.plot(scene, node_colour='grey')
         scene.add_points(pv.PolyData([0.0, 0.0, 0.0]), color='magenta', point_size=15, render_points_as_spheres=True, name='Origin')
         scene.add_text("Origin", font_size=15, color='magenta', position=[0.01, 0.97], viewport=True)
         scene.add_axes()
@@ -1093,7 +1104,7 @@ class CylinderModel:
         """
 
         scene = pv.Plotter()
-        self.geofit_mesh.plot(scene)
+        self.geofit_mesh.plot(scene, node_colour='grey')
 
         # Plot origin point
         scene.add_points(pv.PolyData([0.0, 0.0, 0.0]), color='magenta', point_size=15, render_points_as_spheres=True, name='Origin')
@@ -1116,14 +1127,14 @@ class CylinderModel:
         """
 
         scene = pv.Plotter()
-        self.geofit_mesh.plot(scene)
+        self.geofit_mesh.plot(scene, node_colour='grey')
 
         # Plot origin point
         scene.add_points(pv.PolyData([0.0, 0.0, 0.0]), color='magenta', point_size=15, render_points_as_spheres=True, name='Origin')
         scene.add_text("Origin", font_size=15, color='magenta', position=[0.01, 0.97], viewport=True)
         scene.add_axes()
 
-         # Plot start points
+        # Plot start points
         self.draw_start_points(scene)
 
         # Plot end points
@@ -1173,7 +1184,7 @@ class CylinderModel:
         for tval in range(2):
             scene.subplot(0,tval)
             if tval == 0:
-                self.geofit_mesh.plot(scene)
+                self.geofit_mesh.plot(scene, node_colour='grey')
                 # Plot start points
                 self.draw_start_points(scene)
                 # Plot end points

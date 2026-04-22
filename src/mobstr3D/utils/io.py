@@ -45,7 +45,11 @@ def load_model(inputFile):
 
     # Load model from json
     model_data = []
-    model_data = json.load(inputFile)
+    if isinstance(inputFile, (str, bytes, Path)):
+        with open(inputFile, "r") as file:
+            model_data = json.load(file)
+    else:
+        model_data = json.load(inputFile)
 
     # Reconstruct inputs and data as needed
     frame = model_data["frame"]

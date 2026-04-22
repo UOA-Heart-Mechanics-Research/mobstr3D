@@ -1,3 +1,4 @@
+import os
 import sys
 import numpy as np
 import nibabel as nib
@@ -6,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import pydicom
 from pathlib import Path
+import pyvista as pv
 
 from mobstr3D.preprocessing.DICOM.index_inputs import find_dicom_for_nifti, find_nifti_for_mask, get_slice_location
 
@@ -193,9 +195,9 @@ def create_contours_from_labels(DENSE_series_index, mask, imaging_parameters, co
     epi_pts, epi_center = ray_march_epi(cv2.bitwise_or(myocardium_mask, bloodpool_mask))
 
     # Get slice index from mask filename "*_ID_'slice0''frame00'.nii.gz"
-    slice_idx = int(mask.name.split("_")[3].split(".")[0][0])
+    slice_idx = int(mask.name.split("_")[-1].split(".")[0][0:2])
     # Get frame index from mask filename "*_ID_'slice0''frame00'.nii.gz"
-    frame_idx = int(mask.name.split("_")[3].split(".")[0][1:])
+    frame_idx = int(mask.name.split("_")[-1].split(".")[0][2:])
 
 
     # Debug: plot contours around mask
@@ -203,9 +205,14 @@ def create_contours_from_labels(DENSE_series_index, mask, imaging_parameters, co
         mylogger.info(f'Plotting contour overlays for debugging...')
 
         fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-        ax[0].imshow(seg_data, cmap='jet', alpha=1)
+
+        # Define colourmap for segmentation mask (0 = grey, 1 = green, 2 = red)
+        from matplotlib.colors import ListedColormap
+        cmap = ListedColormap(['grey', 'lightgreen', 'lightcoral'])
+
+        ax[0].imshow(seg_data, cmap=cmap, alpha=1)
         ax[0].set_title('Segmentation Mask')
-        ax[1].imshow(seg_data, cmap='jet', alpha=1)
+        ax[1].imshow(seg_data, cmap=cmap, alpha=1)
         # Plot contours as circle, connected at the start and end
         if endo_pts is not None:
             endo_pts_closed = np.vstack([endo_pts, [endo_pts[0]]])
@@ -216,19 +223,23 @@ def create_contours_from_labels(DENSE_series_index, mask, imaging_parameters, co
             epi_pts_closed = np.vstack([epi_pts, [epi_pts[0]]])
             x_epi = epi_pts_closed[:, 0]
             y_epi = epi_pts_closed[:, 1]
-            ax[1].plot(x_epi, y_epi, 'o', color='green', label='Epicardium')
+            ax[1].plot(x_epi, y_epi, 'o', color='blue', label='Epicardium')
         # Plot center used for ray marching
         ax[1].plot(endo_center[0], endo_center[1], 'x', color='yellow', label='Center_endo')
         ax[1].plot(epi_center[0], epi_center[1], 'x', color='cyan', label='Center_epi')
+        
+        # Get existing handles and labels from the plotted lines
+        existing_handles, existing_labels = ax[1].get_legend_handles_labels()
+        
         # Create legend using proxy artists so labels appear
         handles = [
-            mpatches.Patch(color='blue', label='0 = Background'),
-            mpatches.Patch(color='green', label='1 = Myocardium'),
-            mpatches.Patch(color='red', label='2 = Blood Pool'),
+            mpatches.Patch(color='grey', label='0 = Background'),
+            mpatches.Patch(color='lightgreen', label='1 = Myocardium'),
+            mpatches.Patch(color='lightcoral', label='2 = Blood Pool'),
         ]
-        ax[1].legend(handles=handles, loc='upper right', fontsize=8, framealpha=0.7)
+        ax[1].legend(handles=handles + existing_handles, loc='upper right', fontsize=8, framealpha=0.7)
         ax[1].set_title('Contour Overlay')
-        plt.suptitle(f'{mask.name}')
+        plt.suptitle(f'{mask.name} - Slice_{slice_idx} Frame {frame_idx} [DEBUG]')
         plt.show()
 
 
@@ -237,6 +248,10 @@ def create_contours_from_labels(DENSE_series_index, mask, imaging_parameters, co
         mylogger.info(f'Plotting segmentation mask alongside phase images (for confirming seed point selection frame: {config["parameters"]["frame_of_seed"]})...')
 
         fig, ax = plt.subplots(2, 2, figsize=(10, 10))
+
+        # Define colourmap for segmentation mask (0 = grey, 1 = green, 2 = red)
+        from matplotlib.colors import ListedColormap
+        cmap = ListedColormap(['grey', 'lightgreen', 'lightcoral'])
 
         # Get corresponding X, Y, Z phase DICOM files
         dicom = DENSE_series_index[f"Slice_{slice_idx}"]["MAG"][str(frame_idx)]
@@ -261,7 +276,7 @@ def create_contours_from_labels(DENSE_series_index, mask, imaging_parameters, co
 
         # a. plot segmentation mask and 'MAG' image
         ax[0,0].imshow(mag_data, cmap='gray', alpha=1)
-        ax[0,0].imshow(seg_data, cmap='jet', alpha=0.15)
+        ax[0,0].imshow(seg_data, cmap=cmap, alpha=0.15)
         ax[0,0].set_title('Segmentation Mask')
 
         # b. plot XPHA
@@ -276,13 +291,13 @@ def create_contours_from_labels(DENSE_series_index, mask, imaging_parameters, co
 
         # Create legend using proxy artists so labels appear
         handles = [
-            mpatches.Patch(color='blue', label='0 = Background'),
-            mpatches.Patch(color='green', label='1 = Myocardium'),
-            mpatches.Patch(color='red', label='2 = Blood Pool'),
+            mpatches.Patch(color='grey', label='0 = Background'),
+            mpatches.Patch(color='lightgreen', label='1 = Myocardium'),
+            mpatches.Patch(color='lightcoral', label='2 = Blood Pool'),
         ]
         ax[0,0].legend(handles=handles, loc='upper right', fontsize=8, framealpha=0.7)
         ax[0,0].set_title('Segmentation Overlay')
-        plt.suptitle(f'{mask.name}')
+        plt.suptitle(f'{mask.name} - Slice_{slice_idx} Frame {frame_idx} [DEBUG]')
         plt.show()
 
 
@@ -301,7 +316,8 @@ def create_contours_from_labels(DENSE_series_index, mask, imaging_parameters, co
     epi_pts = np.hstack([epi_pts.astype(np.float64), np.full((len(epi_pts),1), slice_location)])
 
     endo_contours = endo_pts
-    epi_contours = epi_pts     
+    epi_contours = epi_pts
+
 
     return endo_contours, epi_contours
 

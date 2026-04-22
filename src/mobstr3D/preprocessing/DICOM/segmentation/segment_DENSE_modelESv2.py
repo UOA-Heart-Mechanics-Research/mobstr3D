@@ -80,7 +80,7 @@ def plot_segmentation_over_image(seg_file, img_file):
 def infer_labels(config, infer_path, model_path, mylogger):
 
     # Define model and paths
-    model_folder_name = model_path / "nnUNetTrainer__nnUNetPlans__2d"
+    model_folder_name = os.path.join(model_path, "nnUNetTrainer__nnUNetPlans__2d")
 
     input_folder = os.path.join(infer_path)
     output_folder = os.path.join(config["preprocessing_paths"]["output_dir"], "segmentation_output")
@@ -127,8 +127,8 @@ def infer_labels(config, infer_path, model_path, mylogger):
     for seg_file, img_file in zip(segmentation_files, image_files):
 
         # Check matching filenames (slice and frame in string)
-        seg_index = seg_file.name.split(".")[0].split("_")[3]
-        img_index = img_file.name.split(".")[0].split("_")[3]
+        seg_index = seg_file.name.split(".")[0].split("_")[-1]
+        img_index = img_file.name.split(".")[0].split("_")[-2]
         if seg_index != img_index:
             mylogger.error(f'Segmentation file "{seg_file.name}" does not match image file "{img_file.name}".')
             sys.exit(1)
@@ -148,8 +148,8 @@ def infer_labels(config, infer_path, model_path, mylogger):
         for seg_file, img_file in zip(segmentation_files, image_files):
 
             # Check matching filenames (slice and frame in string)
-            seg_index = seg_file.name.split(".")[0].split("_")[3]
-            img_index = img_file.name.split(".")[0].split("_")[3]
+            seg_index = seg_file.name.split(".")[0].split("_")[-1]
+            img_index = img_file.name.split(".")[0].split("_")[-2]
             if seg_index != img_index:
                 mylogger.warning(f'Segmentation file "{seg_file.name}" does not match image file "{img_file.name}". Skipping visualization.')
                 continue

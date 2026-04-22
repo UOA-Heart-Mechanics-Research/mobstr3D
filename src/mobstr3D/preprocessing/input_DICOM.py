@@ -5,6 +5,9 @@ import json
 import nibabel as nib
 import pydicom
 
+from mobstr3D.preprocessing.slice_correct import apply_slice_correction
+from mobstr3D.utils.plot import save_contour_mov, save_displacement_mov
+
 from mobstr3D.preprocessing.DICOM.index_inputs import check_DENSE_3D, find_dicom_for_nifti, find_phasedicom_for_nifti, get_slice_location, flag_slice_location, get_number_of_slices, get_number_of_frames, index_DENSE_series, collect_imaging_parameters
 from mobstr3D.preprocessing.DICOM.segmentation.prepare_segmentation import prep_segmentation
 from mobstr3D.preprocessing.DICOM.segmentation.process_segmentation import create_contours_from_labels
@@ -37,14 +40,27 @@ def perform_DICOM_preprocessing(config,mylogger):
 
         # Input files for DICOM preprocessing must be DENSE DICOM images
 
+        # Check that input path exists
         if not input_path.exists():
             mylogger.error(f'Input path "{input_path}" does not exist.')
             sys.exit(1)
 
-        input_files = list(input_path.glob("*.dcm"))
+        # Check for .dcm files in input directory (case-insensitive)
+        input_files = list(input_path.glob("*.[dD][cC][mM]"))
         if not input_files:
-            mylogger.error(f'No input files found with ".dcm" in "{input_path}".')
-            sys.exit(1)
+
+            # If no .dcm files found, check for .ima files
+            input_files = list(input_path.glob("*.[iI][mM][aA]"))
+
+            if not input_files:
+
+                # If no .dcm or .ima files found, check for .dcm or .ima files in subdirectories (case-insensitive)
+                input_files = list(input_path.glob("**/*.[dD][cC][mM]"))
+                if not input_files:
+                    input_files = list(input_path.glob("**/*.[iI][mM][aA]"))
+                    if not input_files:
+                        mylogger.error(f'No input files found with ".dcm" or ".ima" in "{input_path}".')
+                        sys.exit(1)
 
         is_dense, file_index = check_DENSE_3D(input_files, mylogger)
         if not is_dense:
@@ -103,14 +119,14 @@ def perform_DICOM_preprocessing(config,mylogger):
     # Apply chosen segmentation method to input files to extract contours
     if config["preprocessing_segmentation"]["segmentation_model"] == "modelESv2":
         from mobstr3D.preprocessing.DICOM.segmentation.segment_DENSE_modelESv2 import infer_labels
-        model_path = Path("mobstr3D/preprocessing/DICOM/segmentation/modelESv2")
+        model_path = Path("src/mobstr3D/preprocessing/DICOM/segmentation/modelESv2")
         infer_output = infer_labels(config, infer_path, model_path, mylogger)
 
     elif config["preprocessing_segmentation"]["segmentation_model"] == "modelallv2":
         mylogger.error(f'WIP: modelallv2 segmentation model not yet implemented.')
         sys.exit(1)
         from mobstr3D.preprocessing.DICOM.segmentation.segment_DENSE_modelallv2 import infer_labels
-        model_path = Path("mobstr3D/preprocessing/DICOM/segmentation/modelallv2")
+        model_path = Path("src/mobstr3D/preprocessing/DICOM/segmentation/modelallv2")
         infer_output = infer_labels(config, infer_path, model_path, mylogger)
 
     elif config["preprocessing_segmentation"]["segmentation_model"] == "custom":
@@ -148,11 +164,11 @@ def perform_DICOM_preprocessing(config,mylogger):
     for mask in sorted_masks:
 
         # Get slice index from mask filename "*_ID_'slice0''frame00'.nii.gz"
-        slice_idx = int(mask.name.split("_")[3].split(".")[0][0])
+        slice_idx = int(mask.name.split("_")[-1].split(".")[0][0:2])
         # Get frame index from mask filename "*_ID_'slice0''frame00'.nii.gz"
-        frame_idx = int(mask.name.split("_")[3].split(".")[0][1:])
+        frame_idx = int(mask.name.split("_")[-1].split(".")[0][2:])
 
-        # Ensure dicts have initialized dicts for this slice
+        # Ensure dicts have initialised dicts for this slice
         slice_key = f"Slice_{slice_idx}"
         if slice_key not in endo_contours_ics:
             endo_contours_ics[slice_key] = {}
@@ -205,7 +221,23 @@ def perform_DICOM_preprocessing(config,mylogger):
     locations_ics, displacements_ics = extract_displacements(config, imaging_parameters, flagInverted, nSlices, nFrames, DENSE_series_index, sorted_dicoms, sorted_masks, mylogger)
 
 
-    # 5. Transform outputs to pseudo-cardiac coordinate system
+    # 5. Slice Correction:
+
+    # Apply slice correction to the contours and displacements based on the config
+    endo_contours_ics, epi_contours_ics, locations_ics, displacements_ics, slice_corrections = apply_slice_correction(config, imaging_parameters, endo_contours_ics, epi_contours_ics, locations_ics, displacements_ics, mylogger)
+
+
+    # 6. Save Movies (if requested in config):
+
+    if config["save_mov"]["contours_mov"]:
+        mylogger.info('Saving movie: contours across slices and frames')
+        save_contour_mov(epi_contours_ics, endo_contours_ics, nFrames, config, mylogger)
+    if config["save_mov"]["displacements_mov"]:
+        mylogger.info('Saving movie: displacement quiver plot animation')
+        save_displacement_mov(locations_ics, displacements_ics, nFrames, config, mylogger)
+
+
+    # 7. Transform outputs to pseudo-cardiac coordinate system
 
     # x = long-axis - out-of-plane
     # y and z = in-plane (Note: this could be improved by rotating with respect to the RV centroid)
