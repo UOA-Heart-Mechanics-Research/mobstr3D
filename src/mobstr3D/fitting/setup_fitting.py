@@ -38,7 +38,7 @@ def load_disp(file_path: str, mylogger):
 
 def get_template_parameters(endo_f, epi_f, config):
     """
-    Create a template mesh from the endo and epi contours.
+    Define template mesh parameters from the endo and epi contours.
 
     Note: template mesh generated before rtz2xyz transformation!
     Hence,

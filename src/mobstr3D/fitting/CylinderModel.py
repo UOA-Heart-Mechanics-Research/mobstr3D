@@ -756,7 +756,7 @@ class CylinderModel:
         """
 
         # Embed the start points into the mesh
-        elem, xis = self.geofit_mesh.embed_points(jnp.vstack(self.start_points), verbose=0) #change to verbose = 3 to visualize the embedding errors
+        elem, xis = self.geofit_mesh.embed_points(jnp.vstack(self.start_points), iterations=20, verbose=0) # Change to verbose = 3 to visualize the embedding errors
         pre_sob = self.geofit_mesh.evaluate_sobolev()
         vol_0 = self.geofit_mesh.get_volume()
 
@@ -940,9 +940,9 @@ class CylinderModel:
                 v0[:, :, None],
                 v1[:, :, None],
                 v2[:, :, None],
-            ), axis=-1).astype('float64'))
+            ), axis=-1).astype('float32'))
 
-            spherical =  fw_mat @ tensors #Here is where you would also apply the post-multiplication if converting a 3D tensor, e.g. E, from material to local wall coordinates.
+            spherical = fw_mat @ tensors #Here is where you would also apply the post-multiplication if converting a 3D tensor, e.g. E, from material to local wall coordinates.
 
             return spherical
         

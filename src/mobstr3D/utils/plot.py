@@ -372,8 +372,8 @@ def plot_strains_2D_transmural_heatmap(model):
     fig, axes = plt.subplots(2, 3, figsize=(14, 8))  # 2 rows, 3 columns
 
     radii = np.sqrt(
-        (model.strains["Y"] - model.inputs.translation_vector[0]) ** 2 +
-        (model.strains["Z"] - model.inputs.translation_vector[1]) ** 2
+        (model.strains["Y"] - 0) ** 2 +
+        (model.strains["Z"] - 0) ** 2
     )  # Assuming the first column is the radius
 
     strain_names = ['Circumferential (Theta)', 'Longitudinal (Z)', 'Radial (R)', 'Circ-Long','Circ-Rad', 'Long-Rad']
@@ -387,14 +387,14 @@ def plot_strains_2D_transmural_heatmap(model):
             x = radii
             y = model.strains[strain_keys[count]]  # Extract the strain component by key
             gridsize = 50
-            cmap = plt.get_cmap('viridis')
+            cmap = plt.get_cmap('YlOrBr')
             bgc = cmap(0.0)
             ax.set_facecolor(bgc)
             ax.grid(True, alpha=0.5)
             if i == 0:
-                hb = ax.hexbin(x, y, gridsize=gridsize, cmap=cmap, extent=[np.min(radii), np.max(radii), -0.4, 1.0])#, norm=LogNorm())
+                hb = ax.hexbin(x, y, gridsize=gridsize, cmap=cmap, vmax=10, extent=[np.min(radii), np.max(radii), -0.4, 1.0])#, norm=LogNorm())
             else:
-                hb = ax.hexbin(x, y, gridsize=gridsize, cmap=cmap, extent=[np.min(radii), np.max(radii), -0.2, 0.2])#, norm=LogNorm())
+                hb = ax.hexbin(x, y, gridsize=gridsize, cmap=cmap, vmax=10, extent=[np.min(radii), np.max(radii), -0.2, 0.2])#, norm=LogNorm())
             ax.set_xlabel('Radius (mm)')
             if i == 0:
                 ax.set_ylim(-0.4, 1.0)  # Set y-limits
@@ -470,14 +470,14 @@ def plot_strains_2D_transmural_xi_heatmap(model):
             x = xi[:, 2]  # radial material coordinate
             y = model.strains[strain_keys[count]]  # Extract the strain component by key
             gridsize = 50
-            cmap = plt.get_cmap('viridis')
+            cmap = plt.get_cmap('YlOrBr')
             bgc = cmap(0.0)
             ax.set_facecolor(bgc)
             ax.grid(True, alpha=0.5)
             if i == 0:
-                hb = ax.hexbin(x, y, gridsize=gridsize, cmap=cmap, extent=[0, 1, -0.4, 1.0])#, norm=LogNorm())
+                hb = ax.hexbin(x, y, gridsize=gridsize, cmap=cmap, vmax=10, extent=[0, 1, -0.4, 1.0])#, norm=LogNorm())
             else:
-                hb = ax.hexbin(x, y, gridsize=gridsize, cmap=cmap, extent=[0, 1, -0.2, 0.2])#, norm=LogNorm())
+                hb = ax.hexbin(x, y, gridsize=gridsize, cmap=cmap, vmax=10, extent=[0, 1, -0.2, 0.2])#, norm=LogNorm())
             ax.set_xlabel('xi3 (radial material coordinate)')
             if i == 0:
                 ax.set_ylim(-0.4, 1.0)  # Set y-limits
